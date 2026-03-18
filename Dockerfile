@@ -17,7 +17,7 @@ FROM guacamole/guacamole:${GUAC_VER} AS client
 
 ###############################
 ### Build image without MariaDB
-FROM alpine:3.18 AS nomariadb
+FROM alpine:3.19 AS nomariadb
 ARG GUAC_VER
 LABEL version=$GUAC_VER
 
