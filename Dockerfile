@@ -1,7 +1,4 @@
-### Dockerfile for guacamole
-### Includes the mysql authentication module preinstalled
-
-ARG GUAC_VER=1.5.4
+ARG GUAC_VER=1.5.5
 
 ########################
 ### Get Guacamole Server
@@ -11,94 +8,62 @@ FROM guacamole/guacd:${GUAC_VER} AS server
 ### Get Guacamole Client
 FROM guacamole/guacamole:${GUAC_VER} AS client
 
-
 ####################
 ### Build Main Image
-
-###############################
-### Build image without MariaDB
-FROM alpine:3.18 AS nomariadb
+FROM alpine:3.19
 ARG GUAC_VER
+LABEL maintainer="Guacamole Modernized"
 LABEL version=$GUAC_VER
 
-ARG PREFIX_DIR=/opt/guacamole
+### Környezeti változók a Jasonbean struktúra szerint
+ENV GUACAMOLE_HOME=/config/guacamole \
+    CATALINA_HOME=/opt/tomcat \
+    CATALINA_BASE=/var/lib/tomcat \
+    LD_LIBRARY_PATH=/opt/guacamole/lib \
+    GUACD_LOG_LEVEL=info \
+    LOGBACK_LEVEL=info \
+    JAVA_HOME=/usr/lib/jvm/default-jvm
 
-### Set correct environment variables.
-ENV HOME=/config
-ENV LC_ALL=C.UTF-8
-ENV LANG=en_US.UTF-8
-ENV LANGUAGE=en_US.UTF-8
-ENV LD_LIBRARY_PATH=${PREFIX_DIR}/lib
-ENV GUACD_LOG_LEVEL=info
-ENV LOGBACK_LEVEL=info
-ENV GUACAMOLE_HOME=/config/guacamole
+### Binárisok átmásolása a hivatalos image-ekből
+COPY --from=server /opt/guacamole /opt/guacamole
+COPY --from=client /opt/guacamole /opt/guacamole
 
-### Copy build artifacts into this stage
-COPY --from=server ${PREFIX_DIR} ${PREFIX_DIR}
-COPY --from=client ${PREFIX_DIR} ${PREFIX_DIR}
+### Függőségek telepítése (Alpine 3.19 kompatibilis lista)
+RUN apk update && apk add --no-cache \
+    bash curl shadow supervisor tzdata unzip \
+    mariadb mariadb-client mysql-client \
+    openjdk11-jre-headless \
+    cairo libjpeg-turbo libpng pango uuid-dev \
+    ghostscript terminus-font ttf-dejavu ttf-liberation \
+    util-linux-login procps logrotate pwgen netcat-openbsd
 
-ARG RUNTIME_DEPENDENCIES="  \
-    ca-certificates         \
-    ghostscript             \
-    netcat-openbsd          \
-    shadow                  \
-    terminus-font           \
-    ttf-dejavu              \
-    ttf-liberation          \
-    util-linux-login        \
-    openjdk11-jre-headless  \
-    supervisor              \
-    pwgen                   \
-    tzdata                  \
-    procps                  \
-    logrotate               \
-    wget                    \
-    bash                    \
-    tini"
+### Tomcat 9 telepítése
+RUN mkdir -p ${CATALINA_HOME} ${CATALINA_BASE} && \
+    curl -L https://archive.apache.org/dist/tomcat/tomcat-9/v9.0.86/bin/apache-tomcat-9.0.86.tar.gz | \
+    tar -xzC ${CATALINA_HOME} --strip-components=1 && \
+    rm -rf ${CATALINA_HOME}/webapps/* && \
+    ln -s ${CATALINA_HOME}/webapps ${CATALINA_BASE}/webapps && \
+    ln -s ${CATALINA_HOME}/conf ${CATALINA_BASE}/conf
 
-ADD image /
+### Mappaszerkezet és jogosultságok előkészítése
+RUN groupmod -g 1001 users && \
+    useradd -u 1000 -U -d /config -s /bin/false abc && \
+    usermod -G users abc && \
+    mkdir -p /config/guacamole /config/log/tomcat /var/run/tomcat /var/run/mysqld /var/lib/tomcat/temp && \
+    ln -s /opt/guacamole/guacamole.war ${CATALINA_BASE}/webapps/guacamole.war
 
-### Install packages and clean up in one command to reduce build size
+### Fájlok másolása a repóból (etc mappa)
+COPY image/ /
+# Ha a forkodban az 'image' mappa tartalmazza a fájlokat, akkor 'COPY image/ /'
+# Ha a 'root' mappába tetted őket, akkor 'COPY root/ /'
+# A jasonbean-nél ez általában az 'image' mappa.
 
-RUN apk add --no-cache ${RUNTIME_DEPENDENCIES}                                                                                                                                      && \
-    xargs apk add --no-cache < ${PREFIX_DIR}/DEPENDENCIES                                                                                                                           && \
-    adduser -h /config -s /bin/nologin -u 99 -D abc                                                                                                                                 && \
-    adduser -h /opt/tomcat -s /bin/false -D tomcat                                                                                                                                  && \
-    TOMCAT_VERSION=$(wget -qO- https://tomcat.apache.org/download-80.cgi | grep "8\.5\.[0-9]\+</a>" | sed -e 's|.*>\(.*\)<.*|\1|g')                                                 && \
-    wget https://dlcdn.apache.org/tomcat/tomcat-8/v"$TOMCAT_VERSION"/bin/apache-tomcat-"$TOMCAT_VERSION".tar.gz                                                                     && \
-    tar -xf apache-tomcat-"$TOMCAT_VERSION".tar.gz                                                                                                                                  && \
-    mv apache-tomcat-"$TOMCAT_VERSION"/* /opt/tomcat                                                                                                                                && \
-    rmdir apache-tomcat-"$TOMCAT_VERSION"                                                                                                                                           && \
-    find /opt/tomcat -type d -print0 | xargs -0 chmod 700                                                                                                                           && \
-    chmod +x /opt/tomcat/bin/*.sh                                                                                                                                                   && \
-    mkdir -p /var/lib/tomcat/webapps /var/log/tomcat                                                                                                                                && \
-    ln -s ${PREFIX_DIR}/guacamole.war /var/lib/tomcat/webapps/ROOT.war                                                                                                              && \
-    chmod +x /etc/firstrun/*.sh                                                                                                                                                     && \
-    mkdir -p /config/guacamole /config/log/tomcat /var/lib/tomcat/temp /var/run/tomcat                                                                                              && \
-    ln -s /opt/tomcat/conf /var/lib/tomcat/conf                                                                                                                                     && \
-    ln -s /config/log/tomcat /var/lib/tomcat/logs                                                                                                                                   && \
-    sed -i '/<\/Host>/i \        <Valve className=\"org.apache.catalina.valves.RemoteIpValve\"\n               remoteIpHeader=\"x-forwarded-for\" />' /opt/tomcat/conf/server.xml
+### Jogosultságok és sorvégek kényszerített javítása
+RUN chmod +x /etc/firstrun/*.sh && \
+    sed -i 's/\r$//' /etc/firstrun/*.sh && \
+    chown -R abc:abc /opt/guacamole /config ${CATALINA_HOME} ${CATALINA_BASE} /var/run/mysqld
 
 EXPOSE 8080
-
 VOLUME ["/config"]
 
-CMD [ "/etc/firstrun/firstrun.sh" ]
-
-
-############################
-### Build image with MariaDB 
-FROM nomariadb
-ARG GUAC_VER
-LABEL version=$GUAC_VER
-
-RUN apk add mariadb mariadb-client
-
-ADD image-mariadb /
-
-RUN chmod +x /etc/firstrun/mariadb.sh
-
-### END
-### To make this a persistent guacamole container, you must map /config of this container
-### to a folder on your host machine.
-###
+ENTRYPOINT ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"]
