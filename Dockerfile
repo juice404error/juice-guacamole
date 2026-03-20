@@ -10,7 +10,7 @@ FROM guacamole/guacamole:${GUAC_VER} AS client
 
 ####################
 ### Build Main Image
-FROM alpine:3.19
+FROM alpine:3.18
 ARG GUAC_VER
 LABEL maintainer="Guacamole Modernized"
 LABEL version=$GUAC_VER
