@@ -24,25 +24,27 @@ ENV GUACAMOLE_HOME=/config/guacamole \
     LOGBACK_LEVEL=info \
     JAVA_HOME=/usr/lib/jvm/default-jvm
 
-### Függőségek telepítése
+### Függőségek telepítése - JAVÍTVA (Alpine 3.19 kompatibilis csomagok)
 RUN apk update && apk add --no-cache \
     bash curl shadow supervisor tzdata unzip \
     mariadb mariadb-client mysql-client \
     openjdk11-jre-headless \
-    cairo libjpeg-turbo libpng pango uuid-dev \
+    cairo libjpeg-turbo libpng pango \
+    libuuid util-linux-dev \
     ghostscript terminus-font ttf-dejavu ttf-liberation \
     util-linux-login procps logrotate pwgen netcat-openbsd
 
-### Struktúra létrehozása
-RUN mkdir -p /opt/guacamole/mysql /opt/guacamole/sbin /opt/guacamole/lib /etc/firstrun /etc/supervisor/conf.d
+### Alap struktúra létrehozása
+RUN mkdir -p /opt/guacamole/mysql /opt/guacamole/sbin /opt/guacamole/lib \
+             /etc/firstrun /etc/supervisor/conf.d /etc/my.cnf.d
 
-### Binárisok átmásolása az új 1.6.0 struktúra szerint
+### Binárisok átmásolása az image-ekből
 COPY --from=server /opt/guacamole/sbin/guacd /opt/guacamole/sbin/guacd
 COPY --from=server /opt/guacamole/lib/ /opt/guacamole/lib/
 COPY --from=client /opt/guacamole/webapp/guacamole.war /opt/guacamole/guacamole.war
 COPY --from=client /opt/guacamole/extensions/guacamole-auth-jdbc/mysql/ /opt/guacamole/mysql/
 
-### Tomcat 9 dinamikus letöltése
+### Tomcat 9 dinamikus letöltése és telepítése
 RUN set -x && \
     TOMCAT_9_VER=$(curl -s https://archive.apache.org/dist/tomcat/tomcat-9/ | grep -oE 'v9\.0\.[0-9]+' | sort -V | tail -n 1 | sed 's/^v//') && \
     echo "Detected Tomcat version: ${TOMCAT_9_VER}" && \
@@ -53,37 +55,27 @@ RUN set -x && \
     ln -s ${CATALINA_HOME}/webapps ${CATALINA_BASE}/webapps && \
     ln -s ${CATALINA_HOME}/conf ${CATALINA_BASE}/conf
 
-### Felhasználó és alapkönyvtárak létrehozása
+### Felhasználó és alkalmazás mappák beállítása
 RUN groupmod -g 1001 users && \
     useradd -u 1000 -U -d /config -s /bin/false abc && \
     usermod -G users abc && \
-    mkdir -p /config/guacamole/extensions \
-             /config/log/tomcat \
-             /var/run/tomcat \
-             /var/run/mysqld \
-             /var/lib/tomcat/temp \
-             /etc/firstrun \
-             /etc/supervisor/conf.d \
-             /etc/my.cnf.d
+    mkdir -p /config/guacamole/extensions /config/log/tomcat /var/run/tomcat /var/run/mysqld /var/lib/tomcat/temp
 
-### Fájlok másolása - Direkt célzással (Így nem téveszti el az utat)
-# Az 'image' mappa tartalma
-COPY image/etc/firstrun/ /etc/firstrun/
-COPY image/etc/supervisor/conf.d/ /etc/supervisor/conf.d/
+### Saját konfigurációs fájlok másolása
+# A ./ használata kényszeríti a környezeti kontextus használatát
+COPY ./image/etc/ /etc/
+COPY ./image-mariadb/etc/ /etc/
 
-# Az 'image-mariadb' mappa tartalma
-COPY image-mariadb/etc/firstrun/ /etc/firstrun/
-COPY image-mariadb/etc/supervisor/conf.d/ /etc/supervisor/conf.d/
-COPY image-mariadb/etc/my.cnf.d/ /etc/my.cnf.d/
-
-### Utómunka: Jogosultságok, linkelés és takarítás
+### Utómunka: Jogosultságok, linkelés és tisztítás
 RUN set -x && \
-    # Tomcat linkelése
+    # Guacamole linkelése a Tomcathoz
     ln -sf /opt/guacamole/guacamole.war ${CATALINA_BASE}/webapps/guacamole.war && \
-    # Windows-os sorvégek javítása és futtatási jog (minden .sh fájlra az /etc/firstrun-ban)
-    find /etc/firstrun/ -name "*.sh" -exec sed -i 's/\r$//' {} + && \
-    find /etc/firstrun/ -name "*.sh" -exec chmod +x {} + && \
-    # Tulajdonos beállítása minden fontos mappára
+    # Szkriptek javítása (Windows CRLF hiba ellen) és futtathatóvá tétele
+    if [ -d /etc/firstrun ]; then \
+        find /etc/firstrun/ -name "*.sh" -exec sed -i 's/\r$//' {} + && \
+        find /etc/firstrun/ -name "*.sh" -exec chmod +x {} +; \
+    fi && \
+    # Tulajdonjogok kiosztása
     chown -R abc:abc /opt/guacamole /config ${CATALINA_HOME} ${CATALINA_BASE} /var/run/mysqld /etc/firstrun /etc/my.cnf.d
 
 EXPOSE 8080
