@@ -45,7 +45,9 @@ COPY --from=client /opt/guacamole/webapp/guacamole.war /opt/guacamole/guacamole.
 COPY --from=client /opt/guacamole/extensions/guacamole-auth-jdbc/mysql/ /opt/guacamole/mysql/
 
 ### Tomcat 9 dinamikus letöltése
-RUN TOMCAT_9_VER=$(curl -s https://archive.apache.org/dist/tomcat/tomcat-9/ | grep -o 'v9\.0\.[0-9]\+/' | sort -V | tail -n 1 | tr -d 'v/') && \
+RUN set -x && \
+    TOMCAT_9_VER=$(curl -s https://archive.apache.org/dist/tomcat/tomcat-9/ | grep -oE 'v9\.0\.[0-9]+' | sort -V | tail -n 1 | sed 's/^v//') && \
+    echo "Detected Tomcat version: ${TOMCAT_9_VER}" && \
     mkdir -p ${CATALINA_HOME} ${CATALINA_BASE} && \
     curl -L "https://archive.apache.org/dist/tomcat/tomcat-9/v${TOMCAT_9_VER}/bin/apache-tomcat-${TOMCAT_9_VER}.tar.gz" | \
     tar -xzC ${CATALINA_HOME} --strip-components=1 && \
