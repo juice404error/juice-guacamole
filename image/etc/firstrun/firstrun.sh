@@ -7,7 +7,7 @@ MYSQL_JAR_SRC="/opt/guacamole/mysql/guacamole-auth-jdbc-mysql.jar"
 echo "--- Initializing Guacamole Environment ---"
 
 # Jogosultságok ellenőrzése
-chown -R abc:abc /config /opt/guacamole ${CATALINA_HOME} ${CATALINA_BASE}
+chown -R abc:abc /config ${CATALINA_BASE} /var/run/tomcat /var/run/mysqld
 
 # Logback.xml kinyerése, ha nem létezik
 if [ ! -f "$GUACAMOLE_HOME"/logback.xml ]; then
