@@ -53,27 +53,39 @@ RUN set -x && \
     ln -s ${CATALINA_HOME}/webapps ${CATALINA_BASE}/webapps && \
     ln -s ${CATALINA_HOME}/conf ${CATALINA_BASE}/conf
 
-### Felhasználó és könyvtárak
+### Felhasználó, struktúra és fájlok beállítása (jasonbean stílusú fixálás)
 RUN groupmod -g 1001 users && \
     useradd -u 1000 -U -d /config -s /bin/false abc && \
     usermod -G users abc && \
-    mkdir -p /config/guacamole/extensions /config/log/tomcat /var/run/tomcat /var/run/mysqld /var/lib/tomcat/temp && \
+    # Könyvtárak létrehozása
+    mkdir -p /config/guacamole/extensions \
+             /config/log/tomcat \
+             /var/run/tomcat \
+             /var/run/mysqld \
+             /var/lib/tomcat/temp \
+             /etc/firstrun \
+             /etc/supervisor/conf.d \
+             /etc/my.cnf.d && \
+    # A WAR fájl linkelése a Tomcathoz
     ln -s /opt/guacamole/guacamole.war ${CATALINA_BASE}/webapps/guacamole.war
 
-### Saját fájlok másolása
-RUN mkdir -p /etc/firstrun /etc/supervisor/conf.d /etc/my.cnf.d
+### Fájlok másolása (itt még kell a COPY, de utána azonnal fixáljuk parancsból)
+COPY image/ /tmp/image/
+COPY image-mariadb/ /tmp/image-mariadb/
 
-# Fájlonkénti másolás - így ha bármelyik hiányzik, a Docker pontosan megmondja melyik az
-COPY image/etc/firstrun/firstrun.sh /etc/firstrun/firstrun.sh
-COPY image/etc/firstrun/tomcat-wrapper.sh /etc/firstrun/tomcat-wrapper.sh
-COPY image/etc/supervisor/conf.d/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-COPY image-mariadb/etc/firstrun/mariadb.sh /etc/firstrun/mariadb.sh
-COPY image-mariadb/etc/my.cnf.d/mariadb-server.cnf /etc/my.cnf.d/mariadb-server.cnf
-
-### Jogosultságok kényszerítése
+### Fájlok helyére mozgatása és jogosultságok (Linux parancsokkal, kerülve a COPY hibáit)
 RUN set -x && \
-    chmod +x /etc/firstrun/*.sh && \
-    sed -i 's/\r$//' /etc/firstrun/*.sh && \
+    # Image tartalom mozgatása
+    cp -rv /tmp/image/etc/* /etc/ && \
+    cp -rv /tmp/image-mariadb/etc/* /etc/ && \
+    # MariaDB config külön mozgatása, ha az előző nem vitte volna
+    [ -f /tmp/image-mariadb/etc/my.cnf.d/mariadb-server.cnf ] && cp /tmp/image-mariadb/etc/my.cnf.d/mariadb-server.cnf /etc/my.cnf.d/ || true && \
+    # Takarítás
+    rm -rf /tmp/image /tmp/image-mariadb && \
+    # Jogosultságok és kódolás javítása (CRLF -> LF)
+    find /etc/firstrun/ -name "*.sh" -exec sed -i 's/\r$//' {} + && \
+    find /etc/firstrun/ -name "*.sh" -exec chmod +x {} + && \
+    # Tulajdonos beállítása
     chown -R abc:abc /opt/guacamole /config ${CATALINA_HOME} ${CATALINA_BASE} /var/run/mysqld
 
 EXPOSE 8080
