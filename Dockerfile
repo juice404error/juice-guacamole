@@ -34,7 +34,8 @@ RUN apk update && apk add --no-cache \
     libuuid util-linux-dev \
     ghostscript terminus-font ttf-dejavu ttf-liberation \
     util-linux-login procps logrotate pwgen netcat-openbsd \
-    tini
+    tini \
+    openssl1.1-compat
 
 ### Alap struktúra létrehozása
 RUN mkdir -p /etc/firstrun /etc/supervisor/conf.d /etc/my.cnf.d \
