@@ -94,4 +94,4 @@ RUN set -x && \
 EXPOSE 8080
 VOLUME ["/config"]
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/etc/firstrun/firstrun.sh"]
