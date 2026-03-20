@@ -64,24 +64,32 @@ RUN groupmod -g 1001 users && \
 COPY ./image/etc/ /etc/
 COPY ./image-mariadb/etc/ /etc/
 
-### ÚJ: Entrypoint wrapper létrehozása a VOLUME hibák ellen
+### Entrypoint wrapper - Kényszerített mappa létrehozás és jogosultságok
 RUN echo '#!/bin/bash' > /entrypoint.sh && \
-    echo 'mkdir -p /config/log/tomcat /config/guacamole/extensions' >> /entrypoint.sh && \
-    echo 'chown -R abc:abc /config /var/run/mysqld /var/run/tomcat' >> /entrypoint.sh && \
+    echo 'set -e' >> /entrypoint.sh && \
+    # Mappák létrehozása a VOLUME-on (ha még nem lennének)
+    echo 'mkdir -p /config/guacamole/extensions /config/guacamole/lib /config/log/tomcat /var/run/mysqld /var/run/tomcat' >> /entrypoint.sh && \
+    # Jogosultságok kényszerítése minden indításkor
+    echo 'chown -R abc:abc /config /var/run/mysqld /var/run/tomcat /opt/tomcat' >> /entrypoint.sh && \
+    echo 'chmod +x /opt/guacamole/sbin/guacd /etc/firstrun/*.sh' >> /entrypoint.sh && \
+    # Supervisor indítása
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
-### Utómunka: Jogosultságok és tisztítás
+### Utómunka: Binárisok és szkriptek fixálása build közben is
 RUN set -x && \
     ln -sf /opt/guacamole/guacamole.war ${CATALINA_BASE}/webapps/guacamole.war && \
+    # Minden bináris legyen futtatható
+    chmod +x /opt/guacamole/sbin/guacd && \
     if [ -d /etc/firstrun ]; then \
         find /etc/firstrun/ -name "*.sh" -exec sed -i 's/\r$//' {} + && \
         find /etc/firstrun/ -name "*.sh" -exec chmod +x {} +; \
     fi && \
+    # Biztonság kedvéért a Supervisor konfigokat is olvashatóvá tesszük
+    chmod -R 644 /etc/supervisor/conf.d/* && \
     chown -R abc:abc /opt/guacamole /config ${CATALINA_HOME} ${CATALINA_BASE} /var/run/mysqld /etc/firstrun /etc/my.cnf.d
 
 EXPOSE 8080
 VOLUME ["/config"]
 
-# Az új wrappert indítjuk, ami előkészíti a terepet a Supervisornak
 ENTRYPOINT ["/entrypoint.sh"]
