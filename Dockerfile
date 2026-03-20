@@ -60,15 +60,15 @@ RUN groupmod -g 1001 users && \
     mkdir -p /config/guacamole/extensions /config/log/tomcat /var/run/tomcat /var/run/mysqld /var/lib/tomcat/temp && \
     ln -s /opt/guacamole/guacamole.war ${CATALINA_BASE}/webapps/guacamole.war
 
-### Saját fájlok másolása - Célirányos módszer
-RUN mkdir -p /etc/firstrun /etc/supervisor/conf.d
+### Saját fájlok másolása
+RUN mkdir -p /etc/firstrun /etc/supervisor/conf.d /etc/my.cnf.d
 
-# Direktben a mappák tartalmát másoljuk a helyére
-COPY image/etc/firstrun/ /etc/firstrun/
-COPY image/etc/supervisor/conf.d/ /etc/supervisor/conf.d/
-COPY image-mariadb/etc/firstrun/ /etc/firstrun/
-COPY image-mariadb/etc/supervisor/conf.d/ /etc/supervisor/conf.d/
-COPY image-mariadb/etc/my.cnf.d/ /etc/my.cnf.d/
+# Fájlonkénti másolás - így ha bármelyik hiányzik, a Docker pontosan megmondja melyik az
+COPY image/etc/firstrun/firstrun.sh /etc/firstrun/firstrun.sh
+COPY image/etc/firstrun/tomcat-wrapper.sh /etc/firstrun/tomcat-wrapper.sh
+COPY image/etc/supervisor/conf.d/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+COPY image-mariadb/etc/firstrun/mariadb.sh /etc/firstrun/mariadb.sh
+COPY image-mariadb/etc/my.cnf.d/mariadb-server.cnf /etc/my.cnf.d/mariadb-server.cnf
 
 ### Jogosultságok kényszerítése
 RUN set -x && \
