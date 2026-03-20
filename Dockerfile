@@ -24,13 +24,7 @@ ENV GUACAMOLE_HOME=/config/guacamole \
     LOGBACK_LEVEL=info \
     JAVA_HOME=/usr/lib/jvm/default-jvm
 
-### Binárisok átmásolása az új 1.6.0 struktúra szerint
-COPY --from=server /opt/guacamole /opt/guacamole
-# A WAR fájl és a MySQL kiterjesztés az új helyükről
-COPY --from=client /opt/guacamole/webapp/guacamole.war /opt/guacamole/guacamole.war
-COPY --from=client /opt/guacamole/extensions/guacamole-auth-jdbc/mysql /opt/guacamole/mysql
-
-### Függőségek telepítése
+### Függőségek telepítése (Ezt előrébb hoztuk, hogy a mappák létrehozása biztos legyen)
 RUN apk update && apk add --no-cache \
     bash curl shadow supervisor tzdata unzip \
     mariadb mariadb-client mysql-client \
@@ -39,7 +33,18 @@ RUN apk update && apk add --no-cache \
     ghostscript terminus-font ttf-dejavu ttf-liberation \
     util-linux-login procps logrotate pwgen netcat-openbsd
 
-### Tomcat 9 dinamikus letöltése (mindig a legfrissebb 9-es)
+### Struktúra létrehozása
+RUN mkdir -p /opt/guacamole/mysql /opt/guacamole/sbin /opt/guacamole/lib
+
+### Binárisok átmásolása az új 1.6.0 struktúra szerint (PONTOSÍTVA)
+COPY --from=server /opt/guacamole/sbin/guacd /opt/guacamole/sbin/guacd
+COPY --from=server /opt/guacamole/lib/ /opt/guacamole/lib/
+# A WAR fájl
+COPY --from=client /opt/guacamole/webapp/guacamole.war /opt/guacamole/guacamole.war
+# A MySQL kiterjesztés és a SCHEMÁK (Fontos a perjel a végén!)
+COPY --from=client /opt/guacamole/extensions/guacamole-auth-jdbc/mysql/ /opt/guacamole/mysql/
+
+### Tomcat 9 dinamikus letöltése
 RUN TOMCAT_9_VER=$(curl -s https://archive.apache.org/dist/tomcat/tomcat-9/ | grep -o 'v9\.0\.[0-9]\+/' | sort -V | tail -n 1 | tr -d 'v/') && \
     mkdir -p ${CATALINA_HOME} ${CATALINA_BASE} && \
     curl -L "https://archive.apache.org/dist/tomcat/tomcat-9/v${TOMCAT_9_VER}/bin/apache-tomcat-${TOMCAT_9_VER}.tar.gz" | \
@@ -55,11 +60,11 @@ RUN groupmod -g 1001 users && \
     mkdir -p /config/guacamole/extensions /config/log/tomcat /var/run/tomcat /var/run/mysqld /var/lib/tomcat/temp && \
     ln -s /opt/guacamole/guacamole.war ${CATALINA_BASE}/webapps/guacamole.war
 
-### Saját fájlok másolása
+### Saját fájlok másolása (A sorrend fontos!)
 COPY image/ /
 COPY image-mariadb/ /
 
-### Jogosultságok kényszerítése
+### Jogosultságok kényszerítése és takarítás
 RUN chmod +x /etc/firstrun/*.sh && \
     sed -i 's/\r$//' /etc/firstrun/*.sh && \
     chown -R abc:abc /opt/guacamole /config ${CATALINA_HOME} ${CATALINA_BASE} /var/run/mysqld
