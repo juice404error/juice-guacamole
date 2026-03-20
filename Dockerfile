@@ -25,7 +25,7 @@ ENV GUACAMOLE_HOME=/config/guacamole \
     JAVA_HOME=/usr/lib/jvm/default-jvm \
     HOME=/config
 
-### Függőségek telepítése (Jasonbean alapján kiegészítve)
+### Függőségek telepítése
 RUN apk update && apk add --no-cache \
     bash curl shadow supervisor tzdata unzip \
     mariadb mariadb-client mysql-client \
@@ -36,16 +36,19 @@ RUN apk update && apk add --no-cache \
     util-linux-login procps logrotate pwgen netcat-openbsd \
     tini
 
-### Alap struktúra létrehozása
-RUN mkdir -p /opt/guacamole/mysql /opt/guacamole/sbin /opt/guacamole/lib \
-             /etc/firstrun /etc/supervisor/conf.d /etc/my.cnf.d \
+### Alap struktúra létrehozása (csak a minimális)
+RUN mkdir -p /etc/firstrun /etc/supervisor/conf.d /etc/my.cnf.d \
              /opt/tomcat /var/lib/tomcat
 
-### Binárisok átmásolása
-COPY --from=server /opt/guacamole/sbin/guacd /opt/guacamole/sbin/guacd
-COPY --from=server /opt/guacamole/lib/ /opt/guacamole/lib/
-COPY --from=client /opt/guacamole/webapp/guacamole.war /opt/guacamole/guacamole.war
-COPY --from=client /opt/guacamole/extensions/guacamole-auth-jdbc/mysql/ /opt/guacamole/mysql/
+### Binárisok átmásolása - A TELJES MAPPÁKAT HOZZUK ÁT
+# Ez biztosítja, hogy a guacd megtalálja a saját könyvtárstruktúráját és libjeit
+COPY --from=server /opt/guacamole /opt/guacamole
+COPY --from=client /opt/guacamole /opt/guacamole_client
+
+# A kliensből csak a szükséges részeket mozgatjuk a helyére a közös mappába
+RUN cp /opt/guacamole_client/webapp/guacamole.war /opt/guacamole/guacamole.war && \
+    cp -r /opt/guacamole_client/extensions/guacamole-auth-jdbc/mysql/ /opt/guacamole/mysql/ && \
+    rm -rf /opt/guacamole_client
 
 ### Tomcat 9 telepítése
 RUN set -x && \
@@ -56,9 +59,8 @@ RUN set -x && \
     ln -s ${CATALINA_HOME}/webapps ${CATALINA_BASE}/webapps && \
     ln -s ${CATALINA_HOME}/conf ${CATALINA_BASE}/conf
 
-### FELHASZNÁLÓ LÉTREHOZÁSA (Jasonbean stílusban)
-# UID 99, GID 100 (users), nologin shell
-RUN adduser -h /config -s /bin/nologin -u 99 -G users -D abc && \
+### FELHASZNÁLÓ LÉTREHOZÁSA (Módosítva: /bin/sh shell-lel a hibák elkerülésére)
+RUN adduser -h /config -s /bin/sh -u 99 -G users -D abc && \
     adduser -h /opt/tomcat -s /bin/false -D tomcat && \
     mkdir -p /config/guacamole/extensions /config/log/tomcat /var/run/tomcat /var/run/mysqld /var/lib/tomcat/temp /var/log/supervisor
 
@@ -66,28 +68,27 @@ RUN adduser -h /config -s /bin/nologin -u 99 -G users -D abc && \
 COPY ./image/etc/ /etc/
 COPY ./image-mariadb/etc/ /etc/
 
-### Entrypoint wrapper - JAVÍTVA a jogosultságok kényszerítésével
+### Entrypoint wrapper - Drasztikus jogosultság kényszerítés
 RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
     echo 'mkdir -p /config/guacamole/extensions /config/guacamole/lib /config/log/tomcat /config/log/mysql /var/run/mysqld /var/run/tomcat' >> /entrypoint.sh && \
-    # Fontos: a rendszerkönyvtárak jogosultságainak helyreállítása indításkor
+    # Rendszerkönyvtárak helyreállítása (EACCES elleni védelem)
     echo 'chmod 755 /bin /lib /sbin /usr /usr/bin /usr/lib /etc' >> /entrypoint.sh && \
-    echo 'chmod +x /opt/guacamole/sbin/guacd' >> /entrypoint.sh && \
+    echo 'chmod 755 /opt/guacamole /opt/guacamole/sbin /opt/guacamole/sbin/guacd' >> /entrypoint.sh && \
     echo 'chmod +x /etc/firstrun/*.sh' >> /entrypoint.sh && \
     echo 'sed -i "s/\r$//" /etc/firstrun/*.sh' >> /entrypoint.sh && \
-    # Tulajdonjogok az új UID 99 (abc) részére
-    echo 'chown -R abc:users /config /var/run/mysqld /var/run/tomcat /opt/tomcat /etc/firstrun' >> /entrypoint.sh && \
+    # Minden fontos hely tulajdonosa az abc:users (UID 99)
+    echo 'chown -R abc:users /config /var/run/mysqld /var/run/tomcat /opt/tomcat /etc/firstrun /opt/guacamole' >> /entrypoint.sh && \
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
-### Utómunka: Jogosultságok fixálása
+### Utómunka: Végső simítások a build során
 RUN set -x && \
     ln -sf /opt/guacamole/guacamole.war ${CATALINA_BASE}/webapps/guacamole.war && \
     chmod +x /opt/guacamole/sbin/guacd && \
     find /etc/firstrun/ -name "*.sh" -exec sed -i 's/\r$//' {} + && \
     find /etc/firstrun/ -name "*.sh" -exec chmod +x {} + && \
     chmod -R 644 /etc/supervisor/conf.d/* && \
-    # Minden kritikus mappát az abc (UID 99) tulajdonába adunk
     chown -R abc:users /opt/guacamole /config ${CATALINA_HOME} ${CATALINA_BASE} /var/run/mysqld /etc/firstrun /etc/my.cnf.d
 
 EXPOSE 8080
