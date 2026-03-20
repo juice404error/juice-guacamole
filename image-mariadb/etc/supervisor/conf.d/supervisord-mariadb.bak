@@ -1,8 +1,22 @@
-[include]
-files=/etc/supervisor/conf.d/supervisord.conf
+[supervisord]
+nodaemon=true
+user=root
+logfile=/config/log/supervisord.log
+pidfile=/var/run/supervisord.pid
 
 [program:mariadb]
-command=/usr/bin/mysqld --basedir=/usr --datadir=/config/databases --plugin-dir=/usr/lib/mysql/plugin --skip-log-error --log-error=/config/log/mysql.log --pid-file=/var/run/mysqld/mysqld.pid --socket=/var/run/mysqld/mysqld.sock --port=3306
+command=/usr/bin/mysqld_safe --datadir=/config/databases
 user=abc
-redirect_stderr=true
 stdout_logfile=/config/log/mariadb.log
+stderr_logfile=/config/log/mariadb.log
+autorestart=true
+
+[program:guacd]
+command=/opt/guacamole/sbin/guacd -b 0.0.0.0 -f
+user=abc
+
+[program:tomcat]
+command=/etc/firstrun/tomcat-wrapper.sh
+user=abc
+stdout_logfile=/config/log/tomcat.log
+stderr_logfile=/config/log/tomcat.log
