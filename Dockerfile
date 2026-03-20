@@ -64,14 +64,18 @@ RUN groupmod -g 1001 users && \
 COPY ./image/etc/ /etc/
 COPY ./image-mariadb/etc/ /etc/
 
-### Entrypoint wrapper - Kényszerített mappa létrehozás és jogosultságok
+### Entrypoint wrapper - JAVÍTVA
 RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
-    # Mappák létrehozása a VOLUME-on (ha még nem lennének)
-    echo 'mkdir -p /config/guacamole/extensions /config/guacamole/lib /config/log/tomcat /var/run/mysqld /var/run/tomcat' >> /entrypoint.sh && \
-    # Jogosultságok kényszerítése minden indításkor
-    echo 'chown -R abc:abc /config /var/run/mysqld /var/run/tomcat /opt/tomcat' >> /entrypoint.sh && \
-    echo 'chmod +x /opt/guacamole/sbin/guacd /etc/firstrun/*.sh' >> /entrypoint.sh && \
+    # Kényszerített mappa létrehozás
+    echo 'mkdir -p /config/guacamole/extensions /config/guacamole/lib /config/log/tomcat /config/log/mysql /var/run/mysqld /var/run/tomcat' >> /entrypoint.sh && \
+    # Minden szkriptet és binárist futtathatóvá teszünk az indítás pillanatában
+    echo 'chmod +x /opt/guacamole/sbin/guacd' >> /entrypoint.sh && \
+    echo 'chmod +x /etc/firstrun/*.sh' >> /entrypoint.sh && \
+    # Minden sorvéget mégegyszer fixálunk (biztos, ami biztos)
+    echo 'sed -i "s/\r$//" /etc/firstrun/*.sh' >> /entrypoint.sh && \
+    # Tulajdonjogok beállítása a VOLUME-on és a kritikus helyeken
+    echo 'chown -R abc:abc /config /var/run/mysqld /var/run/tomcat /opt/tomcat /etc/firstrun' >> /entrypoint.sh && \
     # Supervisor indítása
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
