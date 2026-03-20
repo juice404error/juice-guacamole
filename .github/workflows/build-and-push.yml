@@ -9,12 +9,10 @@ permissions:
   contents: write
   packages: write
 
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
-
 jobs:
   check-and-build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -47,14 +45,13 @@ jobs:
           CURRENT_VERSION=$(grep '^ARG GUAC_VER=' Dockerfile | cut -d'=' -f2 || echo "0.0.0")
           echo "current_version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
 
-      - name: Update Dockerfile
+      - name: Update Dockerfile version
         if: steps.guac-version.outputs.latest_version != steps.current-version.outputs.current_version
         run: |
           LATEST="${{ steps.guac-version.outputs.latest_version }}"
           sed -i "s/^ARG GUAC_VER=.*/ARG GUAC_VER=${LATEST}/" Dockerfile
 
       - name: Build and push Docker image
-        if: steps.guac-version.outputs.latest_version != steps.current-version.outputs.current_version
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -64,12 +61,14 @@ jobs:
             ghcr.io/${{ github.repository }}:${{ steps.guac-version.outputs.latest_version }}
           build-args: |
             GUAC_VER=${{ steps.guac-version.outputs.latest_version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Commit and Push
+      - name: Commit and Push changes
         if: steps.guac-version.outputs.latest_version != steps.current-version.outputs.current_version
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add Dockerfile
-          git commit -m "Update to ${{ steps.guac-version.outputs.latest_version }}"
+          git commit -m "Automated update to Guacamole ${{ steps.guac-version.outputs.latest_version }}"
           git push
