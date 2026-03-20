@@ -60,15 +60,20 @@ RUN groupmod -g 1001 users && \
     mkdir -p /config/guacamole/extensions /config/log/tomcat /var/run/tomcat /var/run/mysqld /var/lib/tomcat/temp && \
     ln -s /opt/guacamole/guacamole.war ${CATALINA_BASE}/webapps/guacamole.war
 
-### Saját fájlok másolása
-COPY image/ /
-COPY image-mariadb/ /
+### Saját fájlok másolása - Célirányos módszer
+RUN mkdir -p /etc/firstrun /etc/supervisor/conf.d
 
-### Jogosultságok kényszerítése és takarítás
-# Itt fixáltuk a sed-et, hogy ne bukjon el, ha a shell nem látja a glob-ot
+# Direktben a mappák tartalmát másoljuk a helyére
+COPY image/etc/firstrun/ /etc/firstrun/
+COPY image/etc/supervisor/conf.d/ /etc/supervisor/conf.d/
+COPY image-mariadb/etc/firstrun/ /etc/firstrun/
+COPY image-mariadb/etc/supervisor/conf.d/ /etc/supervisor/conf.d/
+COPY image-mariadb/etc/my.cnf.d/ /etc/my.cnf.d/
+
+### Jogosultságok kényszerítése
 RUN set -x && \
-    find /etc/firstrun/ -name "*.sh" -exec sed -i 's/\r$//' {} + && \
-    find /etc/firstrun/ -name "*.sh" -exec chmod +x {} + && \
+    chmod +x /etc/firstrun/*.sh && \
+    sed -i 's/\r$//' /etc/firstrun/*.sh && \
     chown -R abc:abc /opt/guacamole /config ${CATALINA_HOME} ${CATALINA_BASE} /var/run/mysqld
 
 EXPOSE 8080
