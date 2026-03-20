@@ -41,7 +41,7 @@ RUN apk update && apk add --no-cache \
 RUN mkdir -p /etc/firstrun /etc/supervisor/conf.d /etc/my.cnf.d \
              /opt/tomcat /var/lib/tomcat
 
-### Binárisok átmásolása - A TELJES MAPPÁKAT HOZZUK ÁT
+### Binárisok átmásolása
 COPY --from=server /opt/guacamole /opt/guacamole
 COPY --from=client /opt/guacamole /opt/guacamole_client
 
@@ -68,8 +68,7 @@ RUN adduser -h /config -s /bin/sh -u 99 -G users -D abc && \
 COPY ./image/etc/ /etc/
 COPY ./image-mariadb/etc/ /etc/
 
-### Entrypoint wrapper - JAVÍTOTT JOGOSULTSÁGOK
-# A titok: a /opt/guacamole maradjon ROOT tulajdonban, ahogy Jasonbean-nél!
+### Entrypoint wrapper
 RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
     echo 'mkdir -p /config/guacamole/extensions /config/guacamole/lib /config/log/tomcat /config/log/mysql /var/run/mysqld /var/run/tomcat' >> /entrypoint.sh && \
@@ -77,22 +76,18 @@ RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'chmod 755 /opt/guacamole /opt/guacamole/sbin /opt/guacamole/sbin/guacd' >> /entrypoint.sh && \
     echo 'chmod +x /etc/firstrun/*.sh' >> /entrypoint.sh && \
     echo 'sed -i "s/\r$//" /etc/firstrun/*.sh' >> /entrypoint.sh && \
-    # CSAK a VOLUME-ot és az írható mappákat adjuk át az abc-nek
     echo 'chown -R abc:users /config /var/run/mysqld /var/run/tomcat /opt/tomcat /etc/firstrun' >> /entrypoint.sh && \
-    # A /opt/guacamole-t KIFEJEZETTEN root-ként tartjuk meg
     echo 'chown -R root:root /opt/guacamole' >> /entrypoint.sh && \
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
 ### Utómunka: Végső simítások a build során
 RUN set -x && \
-    ln -sf /opt/guacamole/guacamole.war ${CATALINA_BASE}/webapps/guacamole.war && \
+    ln -sf /opt/guacamole/guacamole.war ${CATALINA_BASE}/webapps/ROOT.war && \
     chmod +x /opt/guacamole/sbin/guacd && \
     find /etc/firstrun/ -name "*.sh" -exec sed -i 's/\r$//' {} + && \
     find /etc/firstrun/ -name "*.sh" -exec chmod +x {} + && \
     chmod -R 644 /etc/supervisor/conf.d/* && \
-    # FIX: A /opt/guacamole és a /var/lib/tomcat/conf maradjon root, 
-    # de a többi írható hely legyen az abc-é
     chown -R root:root /opt/guacamole /etc/supervisor && \
     chown -R abc:users /config ${CATALINA_HOME} ${CATALINA_BASE} /var/run/mysqld /etc/firstrun /etc/my.cnf.d
 
