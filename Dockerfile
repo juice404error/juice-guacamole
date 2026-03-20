@@ -24,7 +24,7 @@ ENV GUACAMOLE_HOME=/config/guacamole \
     LOGBACK_LEVEL=info \
     JAVA_HOME=/usr/lib/jvm/default-jvm
 
-### Függőségek telepítése (Ezt előrébb hoztuk, hogy a mappák létrehozása biztos legyen)
+### Függőségek telepítése
 RUN apk update && apk add --no-cache \
     bash curl shadow supervisor tzdata unzip \
     mariadb mariadb-client mysql-client \
@@ -34,14 +34,12 @@ RUN apk update && apk add --no-cache \
     util-linux-login procps logrotate pwgen netcat-openbsd
 
 ### Struktúra létrehozása
-RUN mkdir -p /opt/guacamole/mysql /opt/guacamole/sbin /opt/guacamole/lib
+RUN mkdir -p /opt/guacamole/mysql /opt/guacamole/sbin /opt/guacamole/lib /etc/firstrun /etc/supervisor/conf.d
 
-### Binárisok átmásolása az új 1.6.0 struktúra szerint (PONTOSÍTVA)
+### Binárisok átmásolása az új 1.6.0 struktúra szerint
 COPY --from=server /opt/guacamole/sbin/guacd /opt/guacamole/sbin/guacd
 COPY --from=server /opt/guacamole/lib/ /opt/guacamole/lib/
-# A WAR fájl
 COPY --from=client /opt/guacamole/webapp/guacamole.war /opt/guacamole/guacamole.war
-# A MySQL kiterjesztés és a SCHEMÁK (Fontos a perjel a végén!)
 COPY --from=client /opt/guacamole/extensions/guacamole-auth-jdbc/mysql/ /opt/guacamole/mysql/
 
 ### Tomcat 9 dinamikus letöltése
@@ -62,13 +60,15 @@ RUN groupmod -g 1001 users && \
     mkdir -p /config/guacamole/extensions /config/log/tomcat /var/run/tomcat /var/run/mysqld /var/lib/tomcat/temp && \
     ln -s /opt/guacamole/guacamole.war ${CATALINA_BASE}/webapps/guacamole.war
 
-### Saját fájlok másolása (A sorrend fontos!)
+### Saját fájlok másolása
 COPY image/ /
 COPY image-mariadb/ /
 
 ### Jogosultságok kényszerítése és takarítás
-RUN chmod +x /etc/firstrun/*.sh && \
-    sed -i 's/\r$//' /etc/firstrun/*.sh && \
+# Itt fixáltuk a sed-et, hogy ne bukjon el, ha a shell nem látja a glob-ot
+RUN set -x && \
+    find /etc/firstrun/ -name "*.sh" -exec sed -i 's/\r$//' {} + && \
+    find /etc/firstrun/ -name "*.sh" -exec chmod +x {} + && \
     chown -R abc:abc /opt/guacamole /config ${CATALINA_HOME} ${CATALINA_BASE} /var/run/mysqld
 
 EXPOSE 8080
