@@ -46,7 +46,7 @@ RUN adduser -h /config -s /bin/sh -u 99 -G users -D abc && \
 COPY ./image/etc/ /etc/
 COPY ./image-mariadb/etc/ /etc/
 
-### ENTRYPOINT SCRIPT - JAVÍTOTT USER KEZELÉSSEL
+### ENTRYPOINT SCRIPT - JAVÍTOTT BIN-LOG ÚTVONALAKKAL ÉS JOGOKKAL
 RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
     echo 'PUID=${PUID:-1000}' >> /entrypoint.sh && \
@@ -54,11 +54,11 @@ RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'echo "Initializing system for PUID $PUID..."' >> /entrypoint.sh && \
     echo 'groupmod -o -g "$PGID" users || true' >> /entrypoint.sh && \
     echo 'usermod -o -u "$PUID" abc' >> /entrypoint.sh && \
-    echo 'mkdir -p /config/guacamole/extensions /config/guacamole/lib /config/log/tomcat /config/log/mysql /config/mysql-schema /config/databases /var/run/mysqld /var/run/tomcat' >> /entrypoint.sh && \
+    echo 'mkdir -p /config/guacamole/extensions /config/guacamole/lib /config/log/tomcat /config/log/mysql /config/mysql-schema /config/databases /var/run/mysqld /var/run/tomcat /var/log/mysql' >> /entrypoint.sh && \
     echo 'chmod +x /etc/firstrun/*.sh' >> /entrypoint.sh && \
     echo 'sed -i "s/\r$//" /etc/firstrun/*.sh' >> /entrypoint.sh && \
-    echo 'chown -R abc:users /config /var/run/mysqld /var/run/tomcat /opt/tomcat /etc/firstrun' >> /entrypoint.sh && \
-    echo 'chmod -R 777 /var/run/mysqld' >> /entrypoint.sh && \
+    echo 'chown -R abc:users /config /var/run/mysqld /var/run/tomcat /opt/tomcat /etc/firstrun /var/log/mysql' >> /entrypoint.sh && \
+    echo 'chmod -R 777 /var/run/mysqld /var/log/mysql' >> /entrypoint.sh && \
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
