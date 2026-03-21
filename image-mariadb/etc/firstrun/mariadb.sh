@@ -3,23 +3,21 @@ MYSQL_DATABASE="/config/databases"
 MYSQL_SCHEMA="/config/mysql-schema"
 MYSQL_CONFIG="/etc/my.cnf.d/mariadb-server.cnf"
 
-echo "[$(date)] Starting MariaDB wrapper (User: abc)..."
+echo "[$(date)] Starting MariaDB wrapper..."
 
-# 1. Konfig injektálás (Jason-féle szóköz)
+# 1. Konfig injektálás
 if ! grep -q "user=" "$MYSQL_CONFIG"; then
     sed -i "/\[mysqld\]/a user= abc" "$MYSQL_CONFIG"
 fi
 
-# 2. Inicializálás, ha az adatbázis még nem létezik
+# 2. Inicializálás
 if [ ! -d "$MYSQL_DATABASE/mysql" ]; then
     echo "[$(date)] Fresh install, initializing MariaDB structure..."
     mkdir -p "$MYSQL_DATABASE"
     chown -R abc:users "$MYSQL_DATABASE"
     
-    # Inicializálás abc-ként
     mysql_install_db --user=abc --datadir="$MYSQL_DATABASE" --skip-test-db > /dev/null 2>&1
     
-    # Átmeneti indítás a sémák betöltéséhez
     /usr/bin/mysqld_safe --datadir="$MYSQL_DATABASE" --user=abc &
     TEMP_PID=$!
     
@@ -41,11 +39,10 @@ if [ ! -d "$MYSQL_DATABASE/mysql" ]; then
         mysqladmin shutdown
         wait $TEMP_PID
     else
-        echo "[$(date)] ERROR: Database failed to start. Check /config/databases/mysql_safe.log"
+        echo "[$(date)] ERROR: Database failed to start."
         exit 1
     fi
 fi
 
-# 3. Végleges indítás abc-ként
 echo "[$(date)] Starting MariaDB normally as abc..."
 exec /usr/bin/mysqld_safe --datadir="$MYSQL_DATABASE" --user=abc
