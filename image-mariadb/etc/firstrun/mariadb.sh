@@ -3,39 +3,36 @@ MYSQL_DATABASE="/config/databases"
 MYSQL_SCHEMA="/config/mysql-schema"
 SOCKET="/var/run/mysqld/mysqld.sock"
 MYSQL_CONFIG="/etc/my.cnf.d/mariadb-server.cnf"
+PUID=${PUID:-1000}
 
-echo "[$(date)] Starting MariaDB wrapper as root..."
+echo "[$(date)] Starting MariaDB wrapper (PUID: $PUID)..."
 
-# 1. Jason-féle konfig módosítás: Pontos szóköz használata (user= 1000)
+# 1. Konfig injektálás pontosan Jason mintájára
 if ! grep -q "user=" "$MYSQL_CONFIG"; then
     echo "[$(date)] Injecting user= $PUID into MariaDB config..."
     sed -i "/\[mysqld\]/a user= $PUID" "$MYSQL_CONFIG"
 fi
 
-# 2. Kényszerített tisztítás - CSAK A TARTALMÁT töröljük, a mappát ne!
+# 2. Mappák létrehozása és 777-es jogosultság az inicializálásig
+mkdir -p "$MYSQL_DATABASE" /var/run/mysqld /var/log/mysql
 if [ ! -f "$MYSQL_DATABASE/guacamole/version" ]; then
     echo "[$(date)] Cleaning database directory content for fresh install..."
-    # Létrehozzuk ha nincs, vagy ha van, töröljük a tartalmát
-    mkdir -p "$MYSQL_DATABASE"
     find "$MYSQL_DATABASE" -mindepth 1 -delete
 fi
 
-# 3. Mappák és socket előkészítése
-mkdir -p /var/run/mysqld /var/log/mysql
-chown -R abc:users /var/run/mysqld /var/log/mysql "$MYSQL_DATABASE"
-chmod -R 777 /var/run/mysqld /var/log/mysql
+# Átmeneti 777, hogy a MariaDB belső folyamatai ne akadjanak el
+chown -R root:root /var/run/mysqld /var/log/mysql "$MYSQL_DATABASE"
+chmod -R 777 /var/run/mysqld /var/log/mysql "$MYSQL_DATABASE"
 
-# 4. Inicializálás
+# 3. Inicializálás
 if [ ! -d "$MYSQL_DATABASE/mysql" ]; then
     echo "[$(date)] Initializing MariaDB structure..."
-    mysql_install_db --user=abc --datadir="$MYSQL_DATABASE" --skip-test-db --auth-root-authentication-method=normal > /dev/null 2>&1
+    mysql_install_db --user=root --datadir="$MYSQL_DATABASE" --skip-test-db --auth-root-authentication-method=normal > /dev/null 2>&1
     
-    # Itt is érdemes megadni a usert explicit
-    /usr/bin/mysqld_safe --datadir="$MYSQL_DATABASE" --user=abc &
+    /usr/bin/mysqld_safe --datadir="$MYSQL_DATABASE" --user=root &
     TEMP_PID=$!
     
     echo "[$(date)] Waiting for database to be ready..."
-    # Megvárjuk amíg tényleg válaszol
     COUNT=0
     until mysqladmin -u root status > /dev/null 2>&1 || [ $COUNT -eq 30 ]; do 
         sleep 1
@@ -57,12 +54,13 @@ if [ ! -d "$MYSQL_DATABASE/mysql" ]; then
         mysqladmin shutdown
         wait $TEMP_PID
     else
-        echo "[$(date)] ERROR: Database failed to start in maintenance mode."
-        kill $TEMP_PID 2>/dev/null
+        echo "[$(date)] ERROR: Database failed to start. Check /config/databases/mysql_safe.log"
         exit 1
     fi
 fi
 
-echo "[$(date)] Starting MariaDB normally as abc (ID: $PUID)..."
-chown -R abc:users "$MYSQL_DATABASE" /var/run/mysqld
+# 4. VÉGLEGES ÁTADÁS: Minden a juice-é (1000)
+echo "[$(date)] Finalizing permissions for abc user..."
+chown -R abc:users "$MYSQL_DATABASE" /var/run/mysqld /var/log/mysql
+chmod -R 755 "$MYSQL_DATABASE"
 exec /usr/bin/mysqld_safe --datadir="$MYSQL_DATABASE" --user=abc
