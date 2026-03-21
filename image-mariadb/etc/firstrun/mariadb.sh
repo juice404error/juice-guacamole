@@ -5,20 +5,23 @@ MYSQL_CONFIG="/etc/my.cnf.d/mariadb-server.cnf"
 
 echo "[$(date)] Starting MariaDB wrapper..."
 
-# 1. Konfig injektálás
+# 1. Konfig injektálás és Bin-log hiba elnyomása
 if ! grep -q "user=" "$MYSQL_CONFIG"; then
     sed -i "/\[mysqld\]/a user= abc" "$MYSQL_CONFIG"
+    # Ez megakadályozza a "File not found" hibát a /var/log/mysql alatt
+    sed -i "/\[mysqld\]/a skip-log-bin" "$MYSQL_CONFIG"
 fi
 
 # 2. Inicializálás
 if [ ! -d "$MYSQL_DATABASE/mysql" ]; then
     echo "[$(date)] Fresh install, initializing MariaDB structure..."
-    mkdir -p "$MYSQL_DATABASE"
-    chown -R abc:users "$MYSQL_DATABASE"
+    mkdir -p "$MYSQL_DATABASE" /var/log/mysql
+    chown -R abc:users "$MYSQL_DATABASE" /var/log/mysql
     
     mysql_install_db --user=abc --datadir="$MYSQL_DATABASE" --skip-test-db > /dev/null 2>&1
     
-    /usr/bin/mysqld_safe --datadir="$MYSQL_DATABASE" --user=abc &
+    # Karbantartó módú indítás a sémák betöltéséhez
+    /usr/bin/mysqld_safe --datadir="$MYSQL_DATABASE" --user=abc --skip-log-bin --skip-networking &
     TEMP_PID=$!
     
     echo "[$(date)] Waiting for database..."
@@ -39,10 +42,12 @@ if [ ! -d "$MYSQL_DATABASE/mysql" ]; then
         mysqladmin shutdown
         wait $TEMP_PID
     else
-        echo "[$(date)] ERROR: Database failed to start."
+        echo "[$(date)] ERROR: Database failed to start. Log content:"
+        cat /config/databases/mysql_safe.log
         exit 1
     fi
 fi
 
 echo "[$(date)] Starting MariaDB normally as abc..."
-exec /usr/bin/mysqld_safe --datadir="$MYSQL_DATABASE" --user=abc
+# Végleges indításnál is kényszerítjük a skip-log-bin-t a biztonság kedvéért
+exec /usr/bin/mysqld_safe --datadir="$MYSQL_DATABASE" --user=abc --skip-log-bin
