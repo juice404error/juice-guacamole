@@ -1,32 +1,26 @@
 #!/bin/bash
 echo "--- Initializing Guacamole Environment ---"
 
-# 1. User beállítása - Kényszerítjük a 1000-es ID-t, ha nem jönne környezeti változó
+# 1. User szinkronizálás (hogy ne 99 legyen)
 PUID=${PUID:-1000}
 PGID=${PGID:-100}
 
 groupmod -o -g "$PGID" abc
 usermod -o -u "$PUID" abc
 
-echo "----------------------"
-echo "User UID: $(id -u abc)"
-echo "User GID: $(id -g abc)"
-echo "----------------------"
-
-# Sablonok másolása
+# 2. Sablonok és logback.xml (Visszaállítva a korábbi jó logika)
+mkdir -p /config/guacamole
 if [ ! -f "/config/guacamole/guacamole.properties" ]; then
     echo "Creating properties from template..."
-    mkdir -p /config/guacamole
     cp /etc/firstrun/templates/* /config/guacamole/
 fi
 
-# Logback.xml kinyerése
 if [ ! -f "/config/guacamole/logback.xml" ]; then
-    echo "Extracting logback.xml..."
+    echo "Extracting logback.xml from WAR..."
     unzip -o -j /opt/guacamole/guacamole.war "WEB-INF/classes/logback.xml" -d "/config/guacamole/" > /dev/null 2>&1
 fi
 
-# MySQL Sémák szinkronizálása
+# 3. MySQL Sémák szinkronizálása
 if [ "$OPT_MYSQL" = "Y" ]; then
     echo "Syncing MySQL schemas..."
     mkdir -p /config/mysql-schema
@@ -35,6 +29,6 @@ if [ "$OPT_MYSQL" = "Y" ]; then
     cp /opt/guacamole/mysql/*.jar /config/guacamole/extensions/
 fi
 
-# CSAK a specifikus mappákat írjuk át, nem a teljes /config-ot!
+# 4. Jogosultságok - CSAK a szükséges helyeken, de ott alaposan
 chown -R abc:users /config/guacamole /config/mysql-schema /opt/tomcat /var/run/tomcat
 echo "--- Initialization Finished ---"
