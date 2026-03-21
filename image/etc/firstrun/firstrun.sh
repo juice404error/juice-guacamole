@@ -10,7 +10,7 @@ if [ ! -f "/config/guacamole/guacamole.properties" ]; then
     cp /etc/firstrun/templates/* /config/guacamole/
 fi
 
-# Logback.xml kinyerése
+# Logback.xml kinyerése és LOG szint beállítása (Amiért szóltál - VISSZATÉVE)
 if [ ! -f "/config/guacamole/logback.xml" ]; then
     echo "Extracting logback.xml..."
     unzip -o -j /opt/guacamole/guacamole.war "WEB-INF/classes/logback.xml" -d "/config/guacamole/" > /dev/null 2>&1
@@ -27,13 +27,18 @@ if [ ! -f "/config/guacamole/logback.xml" ]; then
 EOF
     fi
 fi
+# Log szint beállítása a környezeti változó alapján
+sed -i 's/ level="[^"]*"/ level="'$LOGBACK_LEVEL'"/' /config/guacamole/logback.xml
 
-# MySQL Sémák szinkronizálása
+# MySQL Sémák és JAR-ok szinkronizálása
 if [ "$OPT_MYSQL" = "Y" ]; then
-    echo "Syncing MySQL schemas..."
+    echo "Syncing MySQL extensions and setting permissions..."
     cp -R /opt/guacamole/mysql/schema/* /config/mysql-schema/
     cp /opt/guacamole/mysql/*.jar /config/guacamole/extensions/
+    # Jason-féle futtatási jog kényszerítése a JAR fájlokra
+    chmod +x /config/guacamole/extensions/*.jar
 fi
 
-chown -R abc:users /config/guacamole /config/mysql-schema
+# Jogosultságok véglegesítése
+chown -R abc:users /config/guacamole /config/mysql-schema /config/log/tomcat
 echo "--- Initialization Finished ---"
