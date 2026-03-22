@@ -51,14 +51,14 @@ RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
     echo 'PUID=${PUID:-1000}' >> /entrypoint.sh && \
     echo 'PGID=${PGID:-100}' >> /entrypoint.sh && \
-    echo 'groupmod -o -g "$PGID" users || true' >> /entrypoint.sh && \
+    echo 'groupmod -o -g "$PGID" abc || true' >> /entrypoint.sh && \
     echo 'usermod -o -u "$PUID" abc' >> /entrypoint.sh && \
     # Itt a lényeg: minden szükséges mappát létrehozunk
     echo 'mkdir -p /config/guacamole/extensions /config/guacamole/lib /config/log/tomcat /config/log/mysql /config/mysql-schema /config/databases /var/run/mysqld /var/run/tomcat /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs' >> /entrypoint.sh && \
     echo 'chmod +x /etc/firstrun/*.sh' >> /entrypoint.sh && \
     echo 'sed -i "s/\r$//" /etc/firstrun/*.sh' >> /entrypoint.sh && \
     # Teljes hozzáférést adunk az abc-nek a Tomcat könyvtáraihoz is
-    echo 'chown -R abc:users /config /var/run/mysqld /var/run/tomcat /opt/tomcat /var/lib/tomcat /etc/firstrun' >> /entrypoint.sh && \
+    echo 'chown -R abc:abc /config /var/run/mysqld /var/run/tomcat /opt/tomcat /var/lib/tomcat /etc/firstrun' >> /entrypoint.sh && \
     echo 'chmod -R 777 /var/run/mysqld /var/run/tomcat /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs' >> /entrypoint.sh && \
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
