@@ -40,7 +40,7 @@ RUN set -x && \
     ln -s ${CATALINA_HOME}/webapps ${CATALINA_BASE}/webapps && \
     ln -s ${CATALINA_HOME}/conf ${CATALINA_BASE}/conf
 
-RUN adduser -h /config -s /bin/sh -u 99 -G users -D abc && \
+RUN adduser -h /config -s /bin/sh -u 99 -D abc && \
     mkdir -p /config/guacamole/extensions /config/log/tomcat /var/run/tomcat /var/run/mysqld
 
 COPY ./image/etc/ /etc/
