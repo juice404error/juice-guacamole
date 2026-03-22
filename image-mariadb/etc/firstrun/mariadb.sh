@@ -15,7 +15,7 @@ fi
 if [ ! -d "$MYSQL_DATABASE/mysql" ]; then
     echo "[$(date)] Fresh install, initializing MariaDB structure..."
     mkdir -p "$MYSQL_DATABASE" /var/log/mysql
-    chown -R abc:users "$MYSQL_DATABASE" /var/log/mysql
+    chown -R abc:abc "$MYSQL_DATABASE" /var/log/mysql
     
     mysql_install_db --user=abc --datadir="$MYSQL_DATABASE" --skip-test-db > /dev/null 2>&1
     
