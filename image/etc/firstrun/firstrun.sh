@@ -40,5 +40,5 @@ if [ "$OPT_MYSQL" = "Y" ]; then
 fi
 
 # Jogosultságok véglegesítése
-chown -R abc:users /config/guacamole /config/mysql-schema /config/log/tomcat
+chown -R abc:abc /config/guacamole /config/mysql-schema /config/log/tomcat
 echo "--- Initialization Finished ---"
