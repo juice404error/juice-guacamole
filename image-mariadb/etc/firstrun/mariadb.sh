@@ -42,4 +42,4 @@ fi
 # 3. VÉGLEGES INDÍTÁS - NEM safe wrapperrel, hanem közvetlenül
 echo "[$(date)] Starting MariaDB bin directly as abc..."
 # Itt elhagyjuk az 'exec'-et, hogy a supervisor lássa a folyamatot, vagy marad az exec, ha a supervisor indítja a scriptet
-exec /usr/bin/mysqld --datadir="$MYSQL_DATABASE" --user=abc --skip-log-bin --bind-address=0.0.0.0
+exec /usr/bin/mysqld --basedir=/usr --datadir="$MYSQL_DATABASE" --plugin-dir=/usr/lib/mysql/plugin --skip-log-error --log-error=/config/log/mysql.log --pid-file=/var/run/mysqld/mysqld.pid --socket=/var/run/mysqld/mysqld.sock --user=abc --skip-log-bin --bind-address=0.0.0.0 --port=3306
