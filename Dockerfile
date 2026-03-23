@@ -52,17 +52,23 @@ RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
     echo 'PUID=${PUID:-1000}' >> /entrypoint.sh && \
     echo 'PGID=${PGID:-100}' >> /entrypoint.sh && \
+    # Fixáljuk a csoportot: az abc csoportot a PGID-hez rendeljük
     echo 'groupmod -o -g "$PGID" abc || true' >> /entrypoint.sh && \
     echo 'usermod -o -u "$PUID" abc' >> /entrypoint.sh && \
-    # Itt a lényeg: minden szükséges mappát létrehozunk
-    echo 'mkdir -p /config/guacamole/extensions /config/guacamole/lib /config/log/tomcat /config/log/mysql /config/mysql-schema /config/databases /var/run/mysqld /var/run/tomcat /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs' >> /entrypoint.sh && \
+    # Először létrehozzuk a fizikai mappákat a /config alatt
+    echo 'mkdir -p /config/guacamole/extensions /config/guacamole/lib /config/log/tomcat /config/log/mysql /config/mysql-schema /config/databases' >> /entrypoint.sh && \
+    # Létrehozzuk a futáshoz szükséges belső mappákat (ha linkek voltak, töröljük és mappává tesszük őket a stabilitásért)
+    echo 'for dir in work temp logs; do [ -L /var/lib/tomcat/$dir ] && rm /var/lib/tomcat/$dir; mkdir -p /var/lib/tomcat/$dir; done' >> /entrypoint.sh && \
+    echo 'mkdir -p /var/run/mysqld /var/run/tomcat' >> /entrypoint.sh && \
+    # Script takarítás (Windows-os sorvégek ellen)
     echo 'chmod +x /etc/firstrun/*.sh' >> /entrypoint.sh && \
-    echo 'sed -i "s/\r$//" /etc/firstrun/*.sh' >> /entrypoint.sh && \
-    # Teljes hozzáférést adunk az abc-nek a Tomcat könyvtáraihoz is
+    echo 'find /etc/firstrun/ -name "*.sh" -exec sed -i "s/\\r$//" {} +' >> /entrypoint.sh && \
+    # Jogosultságok: Az abc:abc itt már működni fog, mert feljebb fixáltuk a csoportot
     echo 'chown -R abc:abc /config /var/run/mysqld /var/run/tomcat /opt/tomcat /var/lib/tomcat /etc/firstrun' >> /entrypoint.sh && \
-    echo 'chmod -R 777 /var/run/mysqld /var/run/tomcat /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs' >> /entrypoint.sh && \
-    echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /entrypoint.sh && \
-    sed -i '/<\/Host>/i \        <Valve className=\"org.apache.catalina.valves.RemoteIpValve\"\n               remoteIpHeader=\"x-forwarded-for\" />' /opt/tomcat/conf/server.xml  && \
+    # A kritikus temp és work mappáknak 755-ös jogot adunk (mint Jason-nél), nem 777-et, hogy a Java ne panaszkodjon
+    echo 'chmod -R 755 /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs' >> /entrypoint.sh && \
+    # Itt jön be a TINI használata az indításhoz!
+    echo 'exec /sbin/tini -- /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
 RUN set -x && \
