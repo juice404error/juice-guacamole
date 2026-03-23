@@ -25,11 +25,11 @@ RUN apk update && apk add --no-cache \
 RUN mkdir -p /etc/firstrun /etc/supervisor/conf.d /etc/my.cnf.d /opt/tomcat /var/lib/tomcat
 
 COPY --from=server /opt/guacamole /opt/guacamole
-COPY --from=client /opt/guacamole /opt/guacamole_client
+COPY --from=client /opt/guacamole /opt/guacamole
 
-RUN cp /opt/guacamole_client/webapp/guacamole.war /opt/guacamole/guacamole.war && \
-    cp -r /opt/guacamole_client/extensions/guacamole-auth-jdbc/mysql/ /opt/guacamole/mysql/ && \
-    rm -rf /opt/guacamole_client
+RUN cp /opt/guacamole/webapp/guacamole.war /opt/guacamole/guacamole.war && \
+    cp -r /opt/guacamole/extensions/guacamole-auth-jdbc/mysql/ /opt/guacamole/mysql/ && \
+    #rm -rf /opt/guacamole_client
 
 # Tomcat telepítés
 RUN set -x && \
