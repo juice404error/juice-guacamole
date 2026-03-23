@@ -37,7 +37,7 @@ RUN set -x && \
     curl -L "https://archive.apache.org/dist/tomcat/tomcat-9/v${TOMCAT_9_VER}/bin/apache-tomcat-${TOMCAT_9_VER}.tar.gz" | \
     tar -xzC ${CATALINA_HOME} --strip-components=1 && \
     #rm -rf ${CATALINA_HOME}/webapps/* && \
-    #ln -s ${CATALINA_HOME}/webapps ${CATALINA_BASE}/webapps && \
+    ln -s ${CATALINA_HOME}/webapps ${CATALINA_BASE}/webapps && \
     ln -s ${CATALINA_HOME}/conf ${CATALINA_BASE}/conf
 
 RUN adduser -h /config -s /bin/sh -u 99 -D abc && \
