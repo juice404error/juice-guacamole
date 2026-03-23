@@ -73,7 +73,7 @@ RUN echo '#!/bin/bash' > /entrypoint.sh && \
 
 RUN set -x && \
     ln -s /opt/guacamole/guacamole.war ${CATALINA_BASE}/webapps/ROOT.war && \
-    ln -s /config/log/tomcat /var/lib/tomcat/logs && \
+    #ln -s /config/log/tomcat /var/lib/tomcat/logs && \
     chmod +x /opt/guacamole/sbin/guacd
 
 EXPOSE 8080
