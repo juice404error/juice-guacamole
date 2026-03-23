@@ -28,7 +28,7 @@ COPY --from=server /opt/guacamole /opt/guacamole
 COPY --from=client /opt/guacamole /opt/guacamole
 
 RUN cp /opt/guacamole/webapp/guacamole.war /opt/guacamole/guacamole.war && \
-    cp -r /opt/guacamole/extensions/guacamole-auth-jdbc/mysql/ /opt/guacamole/mysql/ && \
+    cp -r /opt/guacamole/extensions/guacamole-auth-jdbc/mysql/ /opt/guacamole/mysql/
     #rm -rf /opt/guacamole_client
 
 # Tomcat telepítés
@@ -36,8 +36,8 @@ RUN set -x && \
     TOMCAT_9_VER=$(curl -s https://archive.apache.org/dist/tomcat/tomcat-9/ | grep -oE 'v9\.0\.[0-9]+' | sort -V | tail -n 1 | sed 's/^v//') && \
     curl -L "https://archive.apache.org/dist/tomcat/tomcat-9/v${TOMCAT_9_VER}/bin/apache-tomcat-${TOMCAT_9_VER}.tar.gz" | \
     tar -xzC ${CATALINA_HOME} --strip-components=1 && \
-    rm -rf ${CATALINA_HOME}/webapps/* && \
-    ln -s ${CATALINA_HOME}/webapps ${CATALINA_BASE}/webapps && \
+    #rm -rf ${CATALINA_HOME}/webapps/* && \
+    #ln -s ${CATALINA_HOME}/webapps ${CATALINA_BASE}/webapps && \
     ln -s ${CATALINA_HOME}/conf ${CATALINA_BASE}/conf
 
 RUN adduser -h /config -s /bin/sh -u 99 -D abc && \
