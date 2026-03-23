@@ -62,6 +62,7 @@ RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'chown -R abc:abc /config /var/run/mysqld /var/run/tomcat /opt/tomcat /var/lib/tomcat /etc/firstrun' >> /entrypoint.sh && \
     echo 'chmod -R 777 /var/run/mysqld /var/run/tomcat /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs' >> /entrypoint.sh && \
     echo 'exec /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /entrypoint.sh && \
+    sed -i '/<\/Host>/i \        <Valve className=\"org.apache.catalina.valves.RemoteIpValve\"\n               remoteIpHeader=\"x-forwarded-for\" />' /opt/tomcat/conf/server.xml  && \
     chmod +x /entrypoint.sh
 
 RUN set -x && \
