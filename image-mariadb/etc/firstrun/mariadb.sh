@@ -20,7 +20,7 @@ if [ ! -d "$MYSQL_DATABASE/mysql" ]; then
     mysql_install_db --user=abc --datadir="$MYSQL_DATABASE" --skip-test-db > /dev/null 2>&1
     
     # Átmeneti indítás a beállításokhoz - abc-ként!
-    /usr/bin/mariadbd --datadir="$MYSQL_DATABASE" --user=abc --skip-log-bin --skip-networking &
+    /usr/bin/mysqld --datadir="$MYSQL_DATABASE" --user=abc --skip-log-bin --skip-networking &
     TEMP_PID=$!
     
     echo "[$(date)] Waiting for database..."
@@ -42,4 +42,4 @@ fi
 # 3. VÉGLEGES INDÍTÁS - NEM safe wrapperrel, hanem közvetlenül
 echo "[$(date)] Starting MariaDB bin directly as abc..."
 # Itt elhagyjuk az 'exec'-et, hogy a supervisor lássa a folyamatot, vagy marad az exec, ha a supervisor indítja a scriptet
-exec /usr/bin/mariadbd --datadir="$MYSQL_DATABASE" --user=abc --skip-log-bin --bind-address=0.0.0.0
+exec /usr/bin/mysqld --datadir="$MYSQL_DATABASE" --user=abc --skip-log-bin --bind-address=0.0.0.0
