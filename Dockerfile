@@ -65,7 +65,7 @@ RUN echo '#!/bin/bash' > /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
 RUN set -x && \
-    ln -sf /opt/guacamole/guacamole.war ${CATALINA_BASE}/webapps/ROOT.war && \
+    ln -s /opt/guacamole/guacamole.war ${CATALINA_BASE}/webapps/ROOT.war && \
     ln -s /config/log/tomcat /var/lib/tomcat/logs && \
     chmod +x /opt/guacamole/sbin/guacd
 
