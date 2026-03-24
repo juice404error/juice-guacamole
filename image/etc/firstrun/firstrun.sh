@@ -30,12 +30,12 @@ fi
 # Log szint beállítása
 sed -i 's/ level="[^"]*"/ level="'$LOGBACK_LEVEL'"/' /config/guacamole/logback.xml
 
-# JAVÍTOTT RÉSZ: MySQL Sémák, Extension ÉS JDBC Driver szinkronizálása
+# MySQL Sémák, Extension ÉS JDBC Driver szinkronizálása
 if [ "$OPT_MYSQL" = "Y" ]; then
     echo "Syncing MySQL extensions, JDBC driver and setting permissions..."
     cp -R /opt/guacamole/mysql/schema/* /config/mysql-schema/
     cp /opt/guacamole/mysql/*.jar /config/guacamole/extensions/
-    # JDBC Driver másolása a lib mappába
+    # Itt másoljuk a drivert a lib mappába
     cp /opt/guacamole/mysql/lib/*.jar /config/guacamole/lib/ 2>/dev/null
     
     chmod +x /config/guacamole/extensions/*.jar
