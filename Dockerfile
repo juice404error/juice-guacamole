@@ -27,24 +27,24 @@ RUN mkdir -p /etc/firstrun /etc/supervisor/conf.d /etc/my.cnf.d /opt/tomcat /var
 COPY --from=server /opt/guacamole /opt/guacamole
 COPY --from=client /opt/guacamole /opt/guacamole_client
 
+# JAVÍTOTT RÉSZ: JDBC DRIVER MENTÉSE
 RUN cp /opt/guacamole_client/webapp/guacamole.war /opt/guacamole/guacamole.war && \
     cp -r /opt/guacamole_client/extensions/guacamole-auth-jdbc/mysql/ /opt/guacamole/mysql/ && \
+    mkdir -p /opt/guacamole/mysql/lib && \
+    cp /opt/guacamole_client/lib/mysql-connector-*.jar /opt/guacamole/mysql/lib/ && \
     rm -rf /opt/guacamole_client
 
-# Tomcat telepítése (Jason módszere szerint, de frissebb verzióval)
+# Tomcat telepítése
 RUN set -x && \
     TOMCAT_9_VER=$(curl -s https://archive.apache.org/dist/tomcat/tomcat-9/ | grep -oE 'v9\.0\.[0-9]+' | sort -V | tail -n 1 | sed 's/^v//') && \
     curl -L "https://archive.apache.org/dist/tomcat/tomcat-9/v${TOMCAT_9_VER}/bin/apache-tomcat-${TOMCAT_9_VER}.tar.gz" | \
     tar -xzC ${CATALINA_HOME} --strip-components=1 && \
-    # Takarítás
     rm -rf ${CATALINA_HOME}/webapps/* && \
-    # Könyvtárstruktúra létrehozása Jason alapján
     mkdir -p /var/lib/tomcat/webapps /var/lib/tomcat/temp /var/lib/tomcat/work && \
     ln -s /opt/tomcat/conf /var/lib/tomcat/conf && \
-    # Remote IP szelep hozzáadása (Jason-től)
     sed -i '/<\/Host>/i \        <Valve className=\"org.apache.catalina.valves.RemoteIpValve\"\n               remoteIpHeader=\"x-forwarded-for\" />' /opt/tomcat/conf/server.xml
 
-# Felhasználók - maradnak az eredetiek
+# Felhasználók
 RUN adduser -h /config -s /bin/sh -u 99 -D abc && \
     adduser -h /opt/tomcat -s /bin/false -D tomcat && \
     mkdir -p /config/guacamole/extensions /config/log/tomcat /var/run/tomcat /var/run/mysqld
@@ -52,27 +52,21 @@ RUN adduser -h /config -s /bin/sh -u 99 -D abc && \
 COPY ./image/etc/ /etc/
 COPY ./image-mariadb/etc/ /etc/
 
-### ENTRYPOINT SCRIPT JAVÍTÁSA
+### ENTRYPOINT SCRIPT
 RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
     echo 'PUID=${PUID:-1000}' >> /entrypoint.sh && \
     echo 'PGID=${PGID:-100}' >> /entrypoint.sh && \
-    # Csoport és User idomítása (Marad a tegnapi)
     echo 'groupmod -o -g "$PGID" abc || true' >> /entrypoint.sh && \
     echo 'usermod -o -u "$PUID" abc' >> /entrypoint.sh && \
-    # Mappák kényszerítése
     echo 'mkdir -p /config/guacamole/extensions /config/guacamole/lib /config/log/tomcat /config/log/mysql /config/mysql-schema /config/databases' >> /entrypoint.sh && \
     echo 'mkdir -p /var/run/mysqld /var/run/tomcat /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs /var/lib/tomcat/webapps' >> /entrypoint.sh && \
-    # KRITIKUS: Itt Jason-t követjük, a ROOT.war-t a /var/lib/tomcat/webapps-ba tesszük
     echo 'rm -rf /var/lib/tomcat/webapps/ROOT /var/lib/tomcat/webapps/ROOT.war' >> /entrypoint.sh && \
     echo 'ln -sf /opt/guacamole/guacamole.war /var/lib/tomcat/webapps/ROOT.war' >> /entrypoint.sh && \
-    # Script takarítás
     echo 'chmod +x /etc/firstrun/*.sh' >> /entrypoint.sh && \
     echo 'find /etc/firstrun/ -name "*.sh" -exec sed -i "s/\\r$//" {} +' >> /entrypoint.sh && \
-    # Jogosultságok: abc:abc
     echo 'chown -R abc:abc /config /var/run/mysqld /var/run/tomcat /opt/tomcat /var/lib/tomcat /etc/firstrun' >> /entrypoint.sh && \
     echo 'chmod -R 755 /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs /var/lib/tomcat/webapps' >> /entrypoint.sh && \
-    # Indítás
     echo 'exec /sbin/tini -- /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
