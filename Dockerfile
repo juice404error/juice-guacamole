@@ -27,11 +27,12 @@ RUN mkdir -p /etc/firstrun /etc/supervisor/conf.d /etc/my.cnf.d /opt/tomcat /var
 COPY --from=server /opt/guacamole /opt/guacamole
 COPY --from=client /opt/guacamole /opt/guacamole_client
 
-# JAVÍTOTT RÉSZ: JDBC DRIVER MENTÉSE
+# JAVÍTOTT MÁSOLÁSI ÚTVONAL A DRIVERHEZ
 RUN cp /opt/guacamole_client/webapp/guacamole.war /opt/guacamole/guacamole.war && \
     cp -r /opt/guacamole_client/extensions/guacamole-auth-jdbc/mysql/ /opt/guacamole/mysql/ && \
     mkdir -p /opt/guacamole/mysql/lib && \
-    cp /opt/guacamole_client/lib/mysql-connector-*.jar /opt/guacamole/mysql/lib/ && \
+    # A 1.6.0-as verzióban itt található a driver:
+    cp /opt/guacamole_client/webapp/guacamole/WEB-INF/lib/mysql-connector-*.jar /opt/guacamole/mysql/lib/ && \
     rm -rf /opt/guacamole_client
 
 # Tomcat telepítése
