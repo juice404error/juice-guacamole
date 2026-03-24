@@ -27,13 +27,13 @@ RUN mkdir -p /etc/firstrun /etc/supervisor/conf.d /etc/my.cnf.d /opt/tomcat /var
 COPY --from=server /opt/guacamole /opt/guacamole
 COPY --from=client /opt/guacamole /opt/guacamole_client
 
-# GUACAMOLE WAR ÉS EXTENSIONS MÁSOLÁSA + DRIVER LETÖLTÉSE
+# Guacamole fájlok másolása és a JDBC driver letöltése
 RUN cp /opt/guacamole_client/webapp/guacamole.war /opt/guacamole/guacamole.war && \
     cp -r /opt/guacamole_client/extensions/guacamole-auth-jdbc/mysql/ /opt/guacamole/mysql/ && \
     mkdir -p /opt/guacamole/mysql/lib && \
-    # LETÖLTÉS: MariaDB Java Connector (MySQL kompatibilis)
-    curl -L -o /opt/guacamole/mysql/lib/mariadb-java-client.jar \
-    https://downloads.mariadb.com/Connectors/java/connector-java-3.1.2/mariadb-java-client-3.1.2.jar && \
+    # A TESZTELT, JÓ LINK:
+    curl -fL -o /opt/guacamole/mysql/lib/mariadb-java-client.jar \
+    https://repo1.maven.org/maven2/org/mariadb/jdbc/mariadb-java-client/3.1.2/mariadb-java-client-3.1.2.jar && \
     rm -rf /opt/guacamole_client
 
 # Tomcat telepítése
@@ -46,7 +46,7 @@ RUN set -x && \
     ln -s /opt/tomcat/conf /var/lib/tomcat/conf && \
     sed -i '/<\/Host>/i \        <Valve className=\"org.apache.catalina.valves.RemoteIpValve\"\n               remoteIpHeader=\"x-forwarded-for\" />' /opt/tomcat/conf/server.xml
 
-# Felhasználók
+# Felhasználók és mappák
 RUN adduser -h /config -s /bin/sh -u 99 -D abc && \
     adduser -h /opt/tomcat -s /bin/false -D tomcat && \
     mkdir -p /config/guacamole/extensions /config/log/tomcat /var/run/tomcat /var/run/mysqld
@@ -54,7 +54,7 @@ RUN adduser -h /config -s /bin/sh -u 99 -D abc && \
 COPY ./image/etc/ /etc/
 COPY ./image-mariadb/etc/ /etc/
 
-### ENTRYPOINT SCRIPT
+### ENTRYPOINT
 RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
     echo 'PUID=${PUID:-1000}' >> /entrypoint.sh && \
