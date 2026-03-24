@@ -27,12 +27,13 @@ RUN mkdir -p /etc/firstrun /etc/supervisor/conf.d /etc/my.cnf.d /opt/tomcat /var
 COPY --from=server /opt/guacamole /opt/guacamole
 COPY --from=client /opt/guacamole /opt/guacamole_client
 
-# DINAMIKUS KERESÉS ÉS MÁSOLÁS
+# GUACAMOLE WAR ÉS EXTENSIONS MÁSOLÁSA + DRIVER LETÖLTÉSE
 RUN cp /opt/guacamole_client/webapp/guacamole.war /opt/guacamole/guacamole.war && \
     cp -r /opt/guacamole_client/extensions/guacamole-auth-jdbc/mysql/ /opt/guacamole/mysql/ && \
     mkdir -p /opt/guacamole/mysql/lib && \
-    # Megkeressük a mysql-connector jar-t a kliens mappában bárhol, és átmásoljuk
-    find /opt/guacamole_client -name "mysql-connector-*.jar" -exec cp {} /opt/guacamole/mysql/lib/ \; && \
+    # LETÖLTÉS: MariaDB Java Connector (MySQL kompatibilis)
+    curl -L -o /opt/guacamole/mysql/lib/mariadb-java-client.jar \
+    https://downloads.mariadb.com/Connectors/java/connector-java-3.1.2/mariadb-java-client-3.1.2.jar && \
     rm -rf /opt/guacamole_client
 
 # Tomcat telepítése
