@@ -3,7 +3,7 @@ name: Auto Update Guacamole Version
 on:
   schedule:
     - cron: '0 2 * * *'
-  workflow_dispatch: # Kézi indítás lehetősége teszteléshez
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -12,19 +12,21 @@ permissions:
 jobs:
   check-and-build:
     runs-on: ubuntu-latest
+    # Ez kényszeríti a modernebb környezetet
+    timeout-minutes: 60
 
     steps:
-      # 1. Checkout (v4 a legfrissebb Node környezethez)
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # 2. Buildx beállítása (v3 szükséges a Node 20+ támogatáshoz)
+      # Docker setup frissítése a legstabilabb v3-ra
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
+        with:
+          install: true
 
-      # 3. Belépés a GHCR-be (v3 szükséges)
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -32,10 +34,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 4. Legfrissebb Guacamole verzió lekérése
       - name: Get latest Guacamole version
         id: guac-version
         run: |
+          # A jq és curl alapból naprakész az ubuntu-latest-en
           LATEST_VERSION=$(curl -s "https://hub.docker.com/v2/repositories/guacamole/guacamole/tags/?page_size=100" | \
             jq -r '.results[].name' | \
             grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' | \
@@ -43,14 +45,12 @@ jobs:
             tail -n 1)
           echo "latest_version=${LATEST_VERSION}" >> $GITHUB_OUTPUT
 
-      # 5. Aktuális verzió kiolvasása a Dockerfile-ból
       - name: Get current version from Dockerfile
         id: current-version
         run: |
           CURRENT_VERSION=$(grep '^ARG GUAC_VER=' Dockerfile | cut -d'=' -f2 || echo "0.0.0")
           echo "current_version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
 
-      # 6. Dockerfile frissítése (CSAK ha van új verzió)
       - name: Update Dockerfile version
         id: update-check
         if: steps.guac-version.outputs.latest_version != steps.current-version.outputs.current_version
@@ -59,14 +59,15 @@ jobs:
           sed -i "s/^ARG GUAC_VER=.*/ARG GUAC_VER=${LATEST}/" Dockerfile
           echo "updated=true" >> $GITHUB_OUTPUT
 
-      # 7. Build és Push (v6 a legfrissebb, Node 20+ natív támogatással)
-      # Itt hozzáadtam egy feltételt, vagy ha kézzel indítod (workflow_dispatch)
+      # A build-push-action@v6-ot használjuk, de hozzáadunk egy plusz paramétert a stabilitásért
       - name: Build and push Docker image
         if: steps.update-check.outputs.updated == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
+          # Hozzáadva a provenance: false, mert ez néha Node-alapú extra lépéseket generál, ami hibát dobhat
+          provenance: false
           tags: |
             ghcr.io/${{ github.repository }}:latest
             ghcr.io/${{ github.repository }}:${{ steps.guac-version.outputs.latest_version }}
@@ -75,7 +76,6 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # 8. Változások visszatöltése a repoba (CSAK ha frissült)
       - name: Commit and Push changes
         if: steps.update-check.outputs.updated == 'true'
         run: |
