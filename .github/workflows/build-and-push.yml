@@ -3,7 +3,7 @@ name: Auto Update Guacamole Version
 on:
   schedule:
     - cron: '0 2 * * *'
-  workflow_dispatch:
+  workflow_dispatch: # Kézi indítás lehetősége teszteléshez
 
 permissions:
   contents: write
@@ -14,14 +14,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # 1. Checkout (v4 a legfrissebb Node környezethez)
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
+      # 2. Buildx beállítása (v3 szükséges a Node 20+ támogatáshoz)
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      # 3. Belépés a GHCR-be (v3 szükséges)
       - name: Login to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -29,6 +32,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # 4. Legfrissebb Guacamole verzió lekérése
       - name: Get latest Guacamole version
         id: guac-version
         run: |
@@ -39,19 +43,26 @@ jobs:
             tail -n 1)
           echo "latest_version=${LATEST_VERSION}" >> $GITHUB_OUTPUT
 
+      # 5. Aktuális verzió kiolvasása a Dockerfile-ból
       - name: Get current version from Dockerfile
         id: current-version
         run: |
           CURRENT_VERSION=$(grep '^ARG GUAC_VER=' Dockerfile | cut -d'=' -f2 || echo "0.0.0")
           echo "current_version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
 
+      # 6. Dockerfile frissítése (CSAK ha van új verzió)
       - name: Update Dockerfile version
+        id: update-check
         if: steps.guac-version.outputs.latest_version != steps.current-version.outputs.current_version
         run: |
           LATEST="${{ steps.guac-version.outputs.latest_version }}"
           sed -i "s/^ARG GUAC_VER=.*/ARG GUAC_VER=${LATEST}/" Dockerfile
+          echo "updated=true" >> $GITHUB_OUTPUT
 
+      # 7. Build és Push (v6 a legfrissebb, Node 20+ natív támogatással)
+      # Itt hozzáadtam egy feltételt, vagy ha kézzel indítod (workflow_dispatch)
       - name: Build and push Docker image
+        if: steps.update-check.outputs.updated == 'true' || github.event_name == 'workflow_dispatch'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -64,8 +75,9 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      # 8. Változások visszatöltése a repoba (CSAK ha frissült)
       - name: Commit and Push changes
-        if: steps.guac-version.outputs.latest_version != steps.current-version.outputs.current_version
+        if: steps.update-check.outputs.updated == 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
