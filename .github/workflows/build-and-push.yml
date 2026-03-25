@@ -1,12 +1,12 @@
-name: Auto Update Guacamole Version
+name: Guacamole CI/CD - Multi-Branch
 
 on:
   schedule:
-    - cron: '0 2 * * *'
-  workflow_dispatch:
+    - cron: '0 2 * * *' # Éjszakai frissítés ellenőrzése
+  workflow_dispatch:   # Manuális indítás
 
 permissions:
-  contents: write # Fontos a git push-hoz!
+  contents: write
   packages: write
 
 jobs:
@@ -29,6 +29,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # --- VERZIÓKEZELÉS ---
       - name: Get latest Guacamole version
         id: guac-version
         run: |
@@ -45,9 +46,10 @@ jobs:
           CURRENT_VERSION=$(grep '^ARG GUAC_VER=' Dockerfile | cut -d'=' -f2 || echo "0.0.0")
           echo "current_version=${CURRENT_VERSION}" >> $GITHUB_OUTPUT
 
-      # Itt a trükk: alapból false, és csak ha változik, lesz true
-      - name: Update Dockerfile version
+      # --- LOGIKA: FRISSÍTÉS CSAK A DEVELOP ÁGON ---
+      - name: Update Dockerfile version (only on develop)
         id: update-check
+        if: github.ref == 'refs/heads/develop'
         run: |
           LATEST="${{ steps.guac-version.outputs.latest_version }}"
           CURRENT="${{ steps.current-version.outputs.current_version }}"
@@ -58,8 +60,22 @@ jobs:
             echo "updated=false" >> $GITHUB_OUTPUT
           fi
 
-      - name: Build and push Docker image
-        if: steps.update-check.outputs.updated == 'true' || github.event_name == 'workflow_dispatch'
+      # --- BUILD: TEST CÍMKE (Develop ág) ---
+      - name: Build and push TEST image
+        if: github.ref == 'refs/heads/develop' && (steps.update-check.outputs.updated == 'true' || github.event_name == 'workflow_dispatch')
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          provenance: false
+          tags: |
+            ghcr.io/${{ github.repository }}:test
+          build-args: |
+            GUAC_VER=${{ steps.guac-version.outputs.latest_version }}
+
+      # --- BUILD: LATEST CÍMKE (Master ág) ---
+      - name: Build and push STABLE image
+        if: github.ref == 'refs/heads/master'
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -67,19 +83,16 @@ jobs:
           provenance: false
           tags: |
             ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ steps.guac-version.outputs.latest_version }}
+            ghcr.io/${{ github.repository }}:${{ steps.current-version.outputs.current_version }}
           build-args: |
-            GUAC_VER=${{ steps.guac-version.outputs.latest_version }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+            GUAC_VER=${{ steps.current-version.outputs.current_version }}
 
-      - name: Commit and Push changes
-        if: steps.update-check.outputs.updated == 'true'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      # --- VISSZAÍRÁS: Csak a develop ágon ---
+      - name: Commit changes to develop
+        if: github.ref == 'refs/heads/develop' && steps.update-check.outputs.updated == 'true'
         run: |
           git config --local user.email "action@github.com"
           git config --local user.name "GitHub Action"
           git add Dockerfile
-          git commit -m "Automated update to Guacamole ${{ steps.guac-version.outputs.latest_version }}"
-          git push
+          git commit -m "Automated test update to ${{ steps.guac-version.outputs.latest_version }}"
+          git push origin develop
