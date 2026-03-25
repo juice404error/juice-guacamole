@@ -1,4 +1,4 @@
-# Legfrissebb Guacamole image-ek használata
+# Legfrissebb Guacamole image-ek használata alapként
 FROM guacamole/guacd:latest AS server
 FROM guacamole/guacamole:latest AS client
 
@@ -25,15 +25,15 @@ RUN mkdir -p /etc/firstrun /etc/supervisor/conf.d /etc/my.cnf.d /opt/tomcat /var
 COPY --from=server /opt/guacamole /opt/guacamole
 COPY --from=client /opt/guacamole /opt/guacamole_client
 
-# Guacamole fájlok és a legfrissebb JDBC driver letöltése dinamikusan
+# Guacamole fájlok másolása és a legfrissebb MySQL JDBC driver letöltése dinamikusan
 RUN cp /opt/guacamole_client/webapp/guacamole.war /opt/guacamole/guacamole.war && \
     cp -r /opt/guacamole_client/extensions/guacamole-auth-jdbc/mysql/ /opt/guacamole/mysql/ && \
     mkdir -p /opt/guacamole/mysql/lib && \
-    # MAVEN API: Legfrissebb MariaDB JDBC driver verzió lekérdezése és letöltése
-    LATEST_DRIVER_VER=$(curl -s https://search.maven.org/solrsearch/select?q=g:org.mariadb.jdbc+AND+a:mariadb-java-client | grep -oE '"latestVersion":"[^"]+"' | head -1 | cut -d'"' -f4) && \
-    echo "Downloading MariaDB driver version: ${LATEST_DRIVER_VER}" && \
-    curl -fL -o /opt/guacamole/mysql/lib/mariadb-java-client.jar \
-    "https://repo1.maven.org/maven2/org/mariadb/jdbc/mariadb-java-client/${LATEST_DRIVER_VER}/mariadb-java-client-${LATEST_DRIVER_VER}.jar" && \
+    # MAVEN API: Legfrissebb MySQL Connector/J verzió lekérdezése és letöltése
+    LATEST_DRIVER_VER=$(curl -s "https://search.maven.org/solrsearch/select?q=g:com.mysql+AND+a:mysql-connector-j" | grep -oE '"latestVersion":"[^"]+"' | head -1 | cut -d'"' -f4) && \
+    echo "Downloading MySQL driver version: ${LATEST_DRIVER_VER}" && \
+    curl -fL -o /opt/guacamole/mysql/lib/mysql-connector-j.jar \
+    "https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/${LATEST_DRIVER_VER}/mysql-connector-j-${LATEST_DRIVER_VER}.jar" && \
     rm -rf /opt/guacamole_client
 
 # Tomcat telepítése (Dinamikus 9.x verziókeresés)
@@ -46,7 +46,7 @@ RUN set -x && \
     ln -s /opt/tomcat/conf /var/lib/tomcat/conf && \
     sed -i '/<\/Host>/i \        <Valve className=\"org.apache.catalina.valves.RemoteIpValve\"\n               remoteIpHeader=\"x-forwarded-for\" />' /opt/tomcat/conf/server.xml
 
-# Felhasználók
+# Felhasználók létrehozása
 RUN adduser -h /config -s /bin/sh -u 99 -D abc && \
     adduser -h /opt/tomcat -s /bin/false -D tomcat && \
     mkdir -p /config/guacamole/extensions /config/log/tomcat /var/run/tomcat /var/run/mysqld
@@ -54,7 +54,7 @@ RUN adduser -h /config -s /bin/sh -u 99 -D abc && \
 COPY ./image/etc/ /etc/
 COPY ./image-mariadb/etc/ /etc/
 
-### ENTRYPOINT (Dinamikus útvonalakkal)
+### ENTRYPOINT SCRIPT LÉTREHOZÁSA
 RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
     echo 'PUID=${PUID:-1000}' >> /entrypoint.sh && \
