@@ -81,13 +81,15 @@ jobs:
         with:
           context: .
           push: true
-          provenance: false
+          # KÉNYSZERÍTETT MANIFEST LIST (INDEX) LÉTREHOZÁSA:
           platforms: linux/amd64
+          provenance: true  # Visszakapcsoljuk, mert ez segít az Index generálásában
           tags: |
             ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ steps.current-version.outputs.current_version }}
+            ghcr.io/${{ github.repository }}:${{ steps.guac-version.outputs.latest_version }}
           build-args: |
-            GUAC_VER=${{ steps.current-version.outputs.current_version }}
+            # Itt a LATEST-et használjuk, nem a CURRENT-et!
+            GUAC_VER=${{ steps.guac-version.outputs.latest_version }}
 
       # --- VISSZAÍRÁS: Csak a develop ágon ---
       - name: Commit changes to develop
