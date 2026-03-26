@@ -2,7 +2,7 @@
 FROM guacamole/guacd:latest AS server
 FROM guacamole/guacamole:latest AS client
 
-ARG GUAC_VER=1.5.5
+ARG GUAC_VER=1.6.0
 
 FROM alpine:3.18
 ENV GUACAMOLE_HOME=/config/guacamole \
