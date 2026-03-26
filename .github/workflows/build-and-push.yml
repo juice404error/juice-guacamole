@@ -68,14 +68,13 @@ jobs:
           context: .
           push: true
           provenance: false
+          platforms: linux/amd64
           tags: |
             ghcr.io/${{ github.repository }}:test
           build-args: |
             GUAC_VER=${{ steps.guac-version.outputs.latest_version }}
 
       # --- BUILD: LATEST CÍMKE (Master ág) ---
-      # Csak akkor fut le a masteren, ha manuálisan indítod (workflow_dispatch)
-      # vagy ha beolvad (merge) egy módosítás. Az időzítő (schedule) nem fogja futtatni.
       - name: Build and push STABLE image
         if: github.ref == 'refs/heads/master' && github.event_name != 'schedule'
         uses: docker/build-push-action@v6
@@ -83,6 +82,7 @@ jobs:
           context: .
           push: true
           provenance: false
+          platforms: linux/amd64
           tags: |
             ghcr.io/${{ github.repository }}:latest
             ghcr.io/${{ github.repository }}:${{ steps.current-version.outputs.current_version }}
