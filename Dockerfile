@@ -51,6 +51,7 @@ RUN adduser -h /config -s /bin/sh -u 99 -D abc && \
     adduser -h /opt/tomcat -s /bin/false -D tomcat && \
     mkdir -p /config/guacamole/extensions /config/log/tomcat /var/run/tomcat /var/run/mysqld
 
+# Itt másolódik be minden, ami az /etc alá kell (közte az új upgrade-db.sh is)
 COPY ./image/etc/ /etc/
 COPY ./image-mariadb/etc/ /etc/
 
@@ -65,6 +66,7 @@ RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'mkdir -p /var/run/mysqld /var/run/tomcat /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs /var/lib/tomcat/webapps' >> /entrypoint.sh && \
     echo 'rm -rf /var/lib/tomcat/webapps/ROOT /var/lib/tomcat/webapps/ROOT.war' >> /entrypoint.sh && \
     echo 'ln -sf /opt/guacamole/guacamole.war /var/lib/tomcat/webapps/ROOT.war' >> /entrypoint.sh && \
+    # Biztosítjuk, hogy minden .sh fájl futtatható legyen és ne legyen Windows sorvége hiba
     echo 'chmod +x /etc/firstrun/*.sh' >> /entrypoint.sh && \
     echo 'find /etc/firstrun/ -name "*.sh" -exec sed -i "s/\\r$//" {} +' >> /entrypoint.sh && \
     echo 'chown -R abc:abc /config /var/run/mysqld /var/run/tomcat /opt/tomcat /var/lib/tomcat /etc/firstrun' >> /entrypoint.sh && \
