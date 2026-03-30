@@ -4,7 +4,7 @@ FROM guacamole/guacamole:latest AS client
 
 ARG GUAC_VER=1.6.0
 
-FROM alpine:3.18
+FROM alpine:3.19
 ENV GUACAMOLE_HOME=/config/guacamole \
     CATALINA_HOME=/opt/tomcat \
     CATALINA_BASE=/var/lib/tomcat \
