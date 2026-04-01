@@ -14,13 +14,17 @@ ENV GUACAMOLE_HOME=/config/guacamole \
     JAVA_HOME=/usr/lib/jvm/default-jvm \
     HOME=/config
 
+# Csomagok telepítése + OpenSSL 1.1 kompatibilitás az Alpine Edge Testing tárolóból
 RUN apk update && apk add --no-cache \
     bash curl shadow supervisor tzdata unzip \
     mariadb mariadb-client mysql-client \
     openjdk11-jre-headless cairo libjpeg-turbo libpng pango \
     libuuid util-linux-dev ghostscript terminus-font \
     ttf-dejavu ttf-liberation util-linux-login procps \
-    logrotate pwgen netcat-openbsd tini openssl
+    logrotate pwgen netcat-openbsd tini openssl libedit \
+    && apk add --no-cache \
+        --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing \
+        openssl1.1-compat
 
 RUN mkdir -p /etc/firstrun /etc/supervisor/conf.d /etc/my.cnf.d /opt/tomcat /var/lib/tomcat
 
