@@ -57,29 +57,30 @@ RUN adduser -h /config -s /bin/sh -u 99 -D abc && \
 COPY ./image/etc/ /etc/
 COPY ./image-mariadb/etc/ /etc/
 
-# ENTRYPOINT GENERÁLÁSA - A webapp és config összekötése
+# ENTRYPOINT GENERÁLÁSA (Pontos MySQL útvonallal)
 RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
-    # PUID/PGID kezelés
     echo 'PUID=${PUID:-1000}' >> /entrypoint.sh && \
     echo 'PGID=${PGID:-100}' >> /entrypoint.sh && \
     echo 'groupmod -o -g "$PGID" abc || true' >> /entrypoint.sh && \
     echo 'usermod -o -u "$PUID" abc' >> /entrypoint.sh && \
-    # Könyvtárak és sémák
-    echo 'mkdir -p /config/guacamole/extensions /config/guacamole/lib /config/mysql-schema' >> /entrypoint.sh && \
+    # Könyvtárak létrehozása
+    echo 'mkdir -p /config/guacamole/extensions /config/guacamole/lib /config/log/tomcat /config/log/mysql /config/mysql-schema/upgrade /config/databases' >> /entrypoint.sh && \
+    echo 'mkdir -p /var/run/mysqld /var/run/tomcat /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs /var/lib/tomcat/webapps /opt/guacamole/sbin' >> /entrypoint.sh && \
+    # FIX: Pontos másolás a find kimenete alapján (MySQL fókusz)
     echo 'cp -r /opt/guacamole/extensions/guacamole-auth-jdbc/mysql/schema/* /config/mysql-schema/' >> /entrypoint.sh && \
-    # FONTOS: JDBC Driver és Extension másolása a helyére, ha még nincs ott
-    echo 'cp /opt/guacamole/mysql/lib/mysql-connector-j.jar /config/guacamole/lib/' >> /entrypoint.sh && \
-    echo 'cp /opt/guacamole/extensions/guacamole-auth-jdbc/mysql/*.jar /config/guacamole/extensions/' >> /entrypoint.sh && \
-    # Tomcat munkakönyvtárak és jogosultságok
-    echo 'mkdir -p /var/lib/tomcat/webapps /var/lib/tomcat/temp /var/lib/tomcat/work /var/lib/tomcat/logs' >> /entrypoint.sh && \
-    echo 'rm -rf /var/lib/tomcat/webapps/ROOT*' >> /entrypoint.sh && \
-    echo 'cp /opt/guacamole/guacamole.war /var/lib/tomcat/webapps/ROOT.war' >> /entrypoint.sh && \
-    # Guacd plugin link fix
-    echo 'mkdir -p /usr/lib/guacamole && ln -sf /usr/lib/libguac-client-*.so* /usr/lib/guacamole/' >> /entrypoint.sh && \
-    # Minden fájl az abc felhasználóé legyen
-    echo 'chown -R abc:abc /config /var/lib/tomcat /opt/guacamole' >> /entrypoint.sh && \
+    # Pluginok linkelése (RDP/SSH fix)
+    echo 'mkdir -p /usr/lib/guacamole' >> /entrypoint.sh && \
+    echo 'ln -sf /usr/lib/libguac-client-*.so* /usr/lib/guacamole/' >> /entrypoint.sh && \
+    # Webapp és Guacd linkek
+    echo 'rm -rf /var/lib/tomcat/webapps/ROOT /var/lib/tomcat/webapps/ROOT.war' >> /entrypoint.sh && \
+    echo 'ln -sf /opt/guacamole/guacamole.war /var/lib/tomcat/webapps/ROOT.war' >> /entrypoint.sh && \
+    echo 'ln -sf /usr/sbin/guacd /opt/guacamole/sbin/guacd' >> /entrypoint.sh && \
+    # Jogosultságok fixálása (a másolás után!)
     echo 'chmod +x /etc/firstrun/*.sh' >> /entrypoint.sh && \
+    echo 'find /etc/firstrun/ -name "*.sh" -exec sed -i "s/\\r$//" {} +' >> /entrypoint.sh && \
+    echo 'chown -R abc:abc /config /var/run/mysqld /var/run/tomcat /opt/tomcat /var/lib/tomcat /etc/firstrun' >> /entrypoint.sh && \
+    echo 'chmod -R 755 /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs /var/lib/tomcat/webapps' >> /entrypoint.sh && \
     echo 'exec /sbin/tini -- /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
 
