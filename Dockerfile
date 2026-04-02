@@ -57,24 +57,30 @@ RUN adduser -h /config -s /bin/sh -u 99 -D abc && \
 COPY ./image/etc/ /etc/
 COPY ./image-mariadb/etc/ /etc/
 
-# ENTRYPOINT GENERÁLÁSA (Javított útvonal kezeléssel)
+# ENTRYPOINT GENERÁLÁSA
 RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
     echo 'PUID=${PUID:-1000}' >> /entrypoint.sh && \
     echo 'PGID=${PGID:-100}' >> /entrypoint.sh && \
     echo 'groupmod -o -g "$PGID" abc || true' >> /entrypoint.sh && \
     echo 'usermod -o -u "$PUID" abc' >> /entrypoint.sh && \
-    echo 'mkdir -p /config/guacamole/extensions /config/guacamole/lib /config/log/tomcat /config/log/mysql /config/mysql-schema /config/databases' >> /entrypoint.sh && \
-    echo 'mkdir -p /var/run/mysqld /var/run/tomcat /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs /var/lib/tomcat/webapps' >> /entrypoint.sh && \
-    # KRITIKUS JAVÍTÁS: Létrehozzuk a célkönyvtárat a linknek
-    echo 'mkdir -p /opt/guacamole/sbin' >> /entrypoint.sh && \
+    # Könyvtárak biztosítása
+    echo 'mkdir -p /config/guacamole/extensions /config/guacamole/lib /config/log/tomcat /config/log/mysql /config/mysql-schema/upgrade /config/databases' >> /entrypoint.sh && \
+    echo 'mkdir -p /var/run/mysqld /var/run/tomcat /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs /var/lib/tomcat/webapps /opt/guacamole/sbin' >> /entrypoint.sh && \
+    # 1. FIX: Sémák átmásolása (hogy a mariadb.sh megtalálja őket)
+    echo 'if [ -d "/opt/guacamole/mysql/schema" ]; then cp -r /opt/guacamole/mysql/schema/* /config/mysql-schema/; fi' >> /entrypoint.sh && \
+    # 2. FIX: Pluginok linkelése (hogy a guacd lássa az RDP/SSH/VNC-t)
+    echo 'mkdir -p /usr/lib/guacamole' >> /entrypoint.sh && \
+    echo 'ln -sf /usr/lib/libguac-client-*.so* /usr/lib/guacamole/' >> /entrypoint.sh && \
+    # Tomcat webapp beállítása
     echo 'rm -rf /var/lib/tomcat/webapps/ROOT /var/lib/tomcat/webapps/ROOT.war' >> /entrypoint.sh && \
     echo 'ln -sf /opt/guacamole/guacamole.war /var/lib/tomcat/webapps/ROOT.war' >> /entrypoint.sh && \
+    # Szkript tisztítás és jogosultságok
     echo 'chmod +x /etc/firstrun/*.sh' >> /entrypoint.sh && \
     echo 'find /etc/firstrun/ -name "*.sh" -exec sed -i "s/\\r$//" {} +' >> /entrypoint.sh && \
     echo 'chown -R abc:abc /config /var/run/mysqld /var/run/tomcat /opt/tomcat /var/lib/tomcat /etc/firstrun' >> /entrypoint.sh && \
     echo 'chmod -R 755 /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs /var/lib/tomcat/webapps' >> /entrypoint.sh && \
-    # Guacd linkelés javítva
+    # Kompatibilitási link a guacd-nek
     echo 'ln -sf /usr/sbin/guacd /opt/guacamole/sbin/guacd' >> /entrypoint.sh && \
     echo 'exec /sbin/tini -- /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
