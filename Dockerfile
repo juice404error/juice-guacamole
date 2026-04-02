@@ -1,67 +1,60 @@
-# Legfrissebb Guacamole image-ek használata alapként
-FROM guacamole/guacd:latest AS server
-FROM guacamole/guacamole:latest AS client
+# 1. Kliens forrás (Argumentummal a CI/CD-hez)
+ARG GUAC_VER=1.6.0
+FROM guacamole/guacamole:${GUAC_VER} AS client-source
 
+# 2. Végleges Image
+FROM alpine:edge
+
+# CI/CD miatt kell az ARG a második stage-ben is
 ARG GUAC_VER=1.6.0
 
-FROM alpine:3.19
 ENV GUACAMOLE_HOME=/config/guacamole \
     CATALINA_HOME=/opt/tomcat \
     CATALINA_BASE=/var/lib/tomcat \
-    LD_LIBRARY_PATH=/opt/guacamole/lib \
+    LD_LIBRARY_PATH=/usr/lib \
     GUACD_LOG_LEVEL=info \
     LOGBACK_LEVEL=info \
     JAVA_HOME=/usr/lib/jvm/default-jvm \
     HOME=/config
 
-# Csomagok telepítése + OpenSSL 1.1 kompatibilitás az Alpine Edge Testing tárolóból
+# Csomagok + Guacamole Server (OpenSSL 3 kompatibilis)
 RUN apk update && apk add --no-cache \
     bash curl shadow supervisor tzdata unzip \
     mariadb mariadb-client mysql-client \
     openjdk11-jre-headless cairo libjpeg-turbo libpng pango \
     libuuid util-linux-dev ghostscript terminus-font \
     ttf-dejavu ttf-liberation util-linux-login procps \
-    logrotate pwgen netcat-openbsd tini openssl libedit \
-    && apk add --no-cache \
-        --repository=http://dl-cdn.alpinelinux.org/alpine/edge/testing \
-        openssl1.1-compat
+    logrotate pwgen netcat-openbsd tini openssl \
+    guacamole-server \
+    guacamole-server-rdp \
+    guacamole-server-vnc \
+    guacamole-server-ssh
 
 RUN mkdir -p /etc/firstrun /etc/supervisor/conf.d /etc/my.cnf.d /opt/tomcat /var/lib/tomcat
 
-COPY --from=server /opt/guacamole /opt/guacamole
-COPY --from=client /opt/guacamole /opt/guacamole_client
+# Kliens fájlok átemelése (hogy a firstrun.sh megtalálja a .war-t és a sémákat)
+COPY --from=client-source /opt/guacamole/ /opt/guacamole/
 
-# Guacamole fájlok másolása és a legfrissebb MySQL JDBC driver letöltése dinamikusan
-RUN cp /opt/guacamole_client/webapp/guacamole.war /opt/guacamole/guacamole.war && \
-    cp -r /opt/guacamole_client/extensions/guacamole-auth-jdbc/mysql/ /opt/guacamole/mysql/ && \
-    mkdir -p /opt/guacamole/mysql/lib && \
-    # MAVEN API: Legfrissebb MySQL Connector/J verzió lekérdezése és letöltése
-    LATEST_DRIVER_VER=$(curl -s "https://search.maven.org/solrsearch/select?q=g:com.mysql+AND+a:mysql-connector-j" | grep -oE '"latestVersion":"[^"]+"' | head -1 | cut -d'"' -f4) && \
-    echo "Downloading MySQL driver version: ${LATEST_DRIVER_VER}" && \
-    curl -fL -o /opt/guacamole/mysql/lib/mysql-connector-j.jar \
-    "https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/${LATEST_DRIVER_VER}/mysql-connector-j-${LATEST_DRIVER_VER}.jar" && \
-    rm -rf /opt/guacamole_client
-
-# Tomcat telepítése (Dinamikus 9.x verziókeresés)
-RUN set -x && \
-    TOMCAT_9_VER=$(curl -s https://archive.apache.org/dist/tomcat/tomcat-9/ | grep -oE 'v9\.0\.[0-9]+' | sort -V | tail -n 1 | sed 's/^v//') && \
-    curl -L "https://archive.apache.org/dist/tomcat/tomcat-9/v${TOMCAT_9_VER}/bin/apache-tomcat-${TOMCAT_9_VER}.tar.gz" | \
-    tar -xzC ${CATALINA_HOME} --strip-components=1 && \
+# Tomcat és MySQL Driver (Változatlan dinamikus logika)
+RUN TOMCAT_9_VER=$(curl -s https://archive.apache.org/dist/tomcat/tomcat-9/ | grep -oE 'v9\.0\.[0-9]+' | sort -V | tail -n 1 | sed 's/^v//') && \
+    curl -L "https://archive.apache.org/dist/tomcat/tomcat-9/v${TOMCAT_9_VER}/bin/apache-tomcat-${TOMCAT_9_VER}.tar.gz" | tar -xzC ${CATALINA_HOME} --strip-components=1 && \
     rm -rf ${CATALINA_HOME}/webapps/* && \
     mkdir -p /var/lib/tomcat/webapps /var/lib/tomcat/temp /var/lib/tomcat/work && \
     ln -s /opt/tomcat/conf /var/lib/tomcat/conf && \
-    sed -i '/<\/Host>/i \        <Valve className=\"org.apache.catalina.valves.RemoteIpValve\"\n               remoteIpHeader=\"x-forwarded-for\" />' /opt/tomcat/conf/server.xml
+    LATEST_DRIVER_VER=$(curl -s "https://search.maven.org/solrsearch/select?q=g:com.mysql+AND+a:mysql-connector-j" | grep -oE '"latestVersion":"[^"]+"' | head -1 | cut -d'"' -f4) && \
+    mkdir -p /opt/guacamole/mysql/lib && \
+    curl -fL -o /opt/guacamole/mysql/lib/mysql-connector-j.jar "https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/${LATEST_DRIVER_VER}/mysql-connector-j-${LATEST_DRIVER_VER}.jar"
 
-# Felhasználók létrehozása
+# Felhasználók létrehozása (Alpine-on)
 RUN adduser -h /config -s /bin/sh -u 99 -D abc && \
     adduser -h /opt/tomcat -s /bin/false -D tomcat && \
     mkdir -p /config/guacamole/extensions /config/log/tomcat /var/run/tomcat /var/run/mysqld
 
-# Itt másolódik be minden, ami az /etc alá kell (közte az új upgrade-db.sh is)
+# Átadjuk az etc mappát
 COPY ./image/etc/ /etc/
 COPY ./image-mariadb/etc/ /etc/
 
-### ENTRYPOINT SCRIPT LÉTREHOZÁSA
+# ENTRYPOINT GENERÁLÁSA (A QNAP specifikus usermod logikával!)
 RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
     echo 'PUID=${PUID:-1000}' >> /entrypoint.sh && \
@@ -72,16 +65,14 @@ RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'mkdir -p /var/run/mysqld /var/run/tomcat /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs /var/lib/tomcat/webapps' >> /entrypoint.sh && \
     echo 'rm -rf /var/lib/tomcat/webapps/ROOT /var/lib/tomcat/webapps/ROOT.war' >> /entrypoint.sh && \
     echo 'ln -sf /opt/guacamole/guacamole.war /var/lib/tomcat/webapps/ROOT.war' >> /entrypoint.sh && \
-    # Biztosítjuk, hogy minden .sh fájl futtatható legyen és ne legyen Windows sorvége hiba
     echo 'chmod +x /etc/firstrun/*.sh' >> /entrypoint.sh && \
     echo 'find /etc/firstrun/ -name "*.sh" -exec sed -i "s/\\r$//" {} +' >> /entrypoint.sh && \
     echo 'chown -R abc:abc /config /var/run/mysqld /var/run/tomcat /opt/tomcat /var/lib/tomcat /etc/firstrun' >> /entrypoint.sh && \
     echo 'chmod -R 755 /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs /var/lib/tomcat/webapps' >> /entrypoint.sh && \
+    # Fontos: A guacd elérhetőségének biztosítása a supervisord felé
+    echo 'ln -sf /usr/sbin/guacd /opt/guacamole/sbin/guacd' >> /entrypoint.sh && \
     echo 'exec /sbin/tini -- /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
-
-RUN set -x && \
-    chmod +x /opt/guacamole/sbin/guacd
 
 EXPOSE 8080
 VOLUME ["/config"]
