@@ -1,12 +1,15 @@
-# 1. Kliens forrás (Argumentummal a CI/CD-hez)
-ARG GUAC_VER=1.6.0
+# 1. SZAKASZ: Argumentum definiálása a globális hatókörben
+ARG GUAC_VER=1.5.5
+
+# Kliens forrás kinyerése
 FROM guacamole/guacamole:${GUAC_VER} AS client-source
 
-# 2. Végleges Image
+# 2. SZAKASZ: Végleges Image
 FROM alpine:edge
 
-# CI/CD miatt kell az ARG a második stage-ben is
-ARG GUAC_VER=1.6.0
+# KRITIKUS: Újra kell deklarálni az ARG-ot a FROM után, 
+# hogy ebben a szakaszban is elérhető legyen!
+ARG GUAC_VER
 
 ENV GUACAMOLE_HOME=/config/guacamole \
     CATALINA_HOME=/opt/tomcat \
@@ -32,10 +35,10 @@ RUN apk update && apk add --no-cache \
 
 RUN mkdir -p /etc/firstrun /etc/supervisor/conf.d /etc/my.cnf.d /opt/tomcat /var/lib/tomcat
 
-# Kliens fájlok átemelése (hogy a firstrun.sh megtalálja a .war-t és a sémákat)
+# Kliens fájlok átemelése a build során
 COPY --from=client-source /opt/guacamole/ /opt/guacamole/
 
-# Tomcat és MySQL Driver (Változatlan dinamikus logika)
+# Tomcat és MySQL Driver telepítése
 RUN TOMCAT_9_VER=$(curl -s https://archive.apache.org/dist/tomcat/tomcat-9/ | grep -oE 'v9\.0\.[0-9]+' | sort -V | tail -n 1 | sed 's/^v//') && \
     curl -L "https://archive.apache.org/dist/tomcat/tomcat-9/v${TOMCAT_9_VER}/bin/apache-tomcat-${TOMCAT_9_VER}.tar.gz" | tar -xzC ${CATALINA_HOME} --strip-components=1 && \
     rm -rf ${CATALINA_HOME}/webapps/* && \
@@ -45,16 +48,16 @@ RUN TOMCAT_9_VER=$(curl -s https://archive.apache.org/dist/tomcat/tomcat-9/ | gr
     mkdir -p /opt/guacamole/mysql/lib && \
     curl -fL -o /opt/guacamole/mysql/lib/mysql-connector-j.jar "https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/${LATEST_DRIVER_VER}/mysql-connector-j-${LATEST_DRIVER_VER}.jar"
 
-# Felhasználók létrehozása (Alpine-on)
+# Felhasználók és könyvtárak
 RUN adduser -h /config -s /bin/sh -u 99 -D abc && \
     adduser -h /opt/tomcat -s /bin/false -D tomcat && \
-    mkdir -p /config/guacamole/extensions /config/log/tomcat /var/run/tomcat /var/run/mysqld
+    mkdir -p /config/guacamole/extensions /config/guacamole/lib /config/log/tomcat /var/run/tomcat /var/run/mysqld
 
-# Átadjuk az etc mappát
+# Egyéb konfigurációk másolása
 COPY ./image/etc/ /etc/
 COPY ./image-mariadb/etc/ /etc/
 
-# ENTRYPOINT GENERÁLÁSA (A QNAP specifikus usermod logikával!)
+# ENTRYPOINT GENERÁLÁSA (QNAP fixekkel)
 RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'set -e' >> /entrypoint.sh && \
     echo 'PUID=${PUID:-1000}' >> /entrypoint.sh && \
@@ -69,7 +72,7 @@ RUN echo '#!/bin/bash' > /entrypoint.sh && \
     echo 'find /etc/firstrun/ -name "*.sh" -exec sed -i "s/\\r$//" {} +' >> /entrypoint.sh && \
     echo 'chown -R abc:abc /config /var/run/mysqld /var/run/tomcat /opt/tomcat /var/lib/tomcat /etc/firstrun' >> /entrypoint.sh && \
     echo 'chmod -R 755 /var/lib/tomcat/work /var/lib/tomcat/temp /var/lib/tomcat/logs /var/lib/tomcat/webapps' >> /entrypoint.sh && \
-    # Fontos: A guacd elérhetőségének biztosítása a supervisord felé
+    # Guacd áthelyezése a natív helyre, de linkelés a kompatibilitáshoz
     echo 'ln -sf /usr/sbin/guacd /opt/guacamole/sbin/guacd' >> /entrypoint.sh && \
     echo 'exec /sbin/tini -- /usr/bin/supervisord -c /etc/supervisor/conf.d/supervisord.conf' >> /entrypoint.sh && \
     chmod +x /entrypoint.sh
