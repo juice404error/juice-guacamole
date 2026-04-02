@@ -1,5 +1,5 @@
 # 1. SZAKASZ: Argumentum definiálása a globális hatókörben
-ARG GUAC_VER=1.5.5
+ARG GUAC_VER=1.6.0
 
 # Kliens forrás kinyerése
 FROM guacamole/guacamole:${GUAC_VER} AS client-source
